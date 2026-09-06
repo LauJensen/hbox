@@ -2,6 +2,8 @@
 
 **Turns a screenshot into a website in minutes**
 
+[![Screenshot of Hbox](docs/images/readme_screenshot.png)](docs/images/readme_screenshot.png)
+
 On its own, `hbox` is a static site builder which lets you create, extend and deploy websites very quickly.
 
 Blogging is a first class citizen, which supports converting pure markdown into blogposts.
