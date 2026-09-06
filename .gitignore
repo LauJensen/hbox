@@ -1,0 +1,7 @@
+/sites/*
+/dist/*
+/target
+/dist
+.envrc
+todo.org
+Cargo.lock

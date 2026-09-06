@@ -1,0 +1,2158 @@
+/* ==========================================================================
+   HBOX GLOBAL.CSS
+   Structural, reusable, design-neutral CSS.
+
+   Intended ownership:
+   - global.css: layout primitives, reset, accessibility, responsive utilities
+   - design.css: typography, colors, borders, shadows, branded components
+   - page.css: styles unique to one page
+
+   Avoid adding page-specific colors, fonts, borders, or decorative effects here.
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1. GLOBAL LAYOUT TOKENS
+   ========================================================================== */
+
+:root {
+  /* Content widths */
+  --container-narrow: 48rem;
+  --container-default: 72rem;
+  --container-wide: 90rem;
+  --container-full: 100%;
+
+  /* Responsive page gutters */
+  --page-gutter-min: 1rem;
+  --page-gutter-preferred: 4vw;
+  --page-gutter-max: 3rem;
+  --page-gutter:
+    clamp(
+      var(--page-gutter-min),
+      var(--page-gutter-preferred),
+      var(--page-gutter-max)
+    );
+
+  /* Reusable spacing scale */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+
+  /* Fluid section spacing */
+  --section-space-small: clamp(2rem, 5vw, 4rem);
+  --section-space-default: clamp(3rem, 7vw, 6rem);
+  --section-space-large: clamp(4rem, 10vw, 8rem);
+
+  /* Grid defaults */
+  --grid-gap: var(--space-lg);
+  --grid-min-column-width: 16rem;
+
+  /* Common interface dimensions */
+  --control-min-height: 2.75rem;
+  --touch-target-min: 2.75rem;
+
+  /* Layering */
+  --z-base: 0;
+  --z-content: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+
+/* ==========================================================================
+   2. MODERN RESET
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 20rem;
+  scroll-behavior: smooth;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+
+ul[role="list"],
+ol[role="list"] {
+  list-style: none;
+}
+
+button,
+input,
+select,
+textarea {
+  margin: 0;
+  font: inherit;
+}
+
+button,
+select {
+  text-transform: none;
+}
+
+button,
+[type="button"],
+[type="reset"],
+[type="submit"] {
+  appearance: button;
+  -webkit-appearance: button;
+}
+
+button,
+label,
+select,
+summary,
+[role="button"],
+[type="button"],
+[type="reset"],
+[type="submit"],
+[type="checkbox"],
+[type="radio"] {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+textarea {
+  resize: vertical;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+img,
+video {
+  height: auto;
+}
+
+iframe {
+  max-width: 100%;
+  border: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration-skip-ink: auto;
+}
+
+abbr[title] {
+  text-decoration: underline dotted;
+  text-decoration-skip-ink: none;
+}
+
+hr {
+  height: 0;
+  margin: var(--space-lg) 0;
+  border: 0;
+  border-top: 1px solid currentColor;
+  opacity: 0.2;
+}
+
+pre,
+code,
+kbd,
+samp {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+code {
+  overflow-wrap: anywhere;
+}
+
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  padding: 0;
+}
+
+summary {
+  display: list-item;
+}
+
+dialog {
+  max-width: calc(100% - (2 * var(--page-gutter)));
+  max-height: calc(100% - (2 * var(--page-gutter)));
+  padding: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+
+/* ==========================================================================
+   3. ACCESSIBILITY
+   ========================================================================== */
+
+:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 3px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: var(--z-toast);
+  padding: var(--space-xs) var(--space-sm);
+  transform: translateY(calc(-100% - var(--space-lg)));
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.visually-hidden,
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.visually-hidden-focusable:not(:focus, :focus-within) {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* ==========================================================================
+   4. DOCUMENT STRUCTURE
+   ========================================================================== */
+
+.site {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+.site-header,
+.site-main,
+.site-footer {
+  width: 100%;
+}
+
+.site-main {
+  flex: 1 0 auto;
+}
+
+.site-footer {
+  margin-top: auto;
+}
+
+.page {
+  width: 100%;
+}
+
+.page-header,
+.page-main,
+.page-footer {
+  width: 100%;
+}
+
+
+/* ==========================================================================
+   5. CONTAINERS
+   ========================================================================== */
+
+.container,
+.container-narrow,
+.container-wide,
+.container-full {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--page-gutter);
+}
+
+.container {
+  max-width:
+    calc(
+      var(--container-default) +
+      (2 * var(--page-gutter))
+    );
+}
+
+.container-narrow {
+  max-width:
+    calc(
+      var(--container-narrow) +
+      (2 * var(--page-gutter))
+    );
+}
+
+.container-wide {
+  max-width:
+    calc(
+      var(--container-wide) +
+      (2 * var(--page-gutter))
+    );
+}
+
+.container-full {
+  max-width: none;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.full-bleed {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+}
+
+.content-width {
+  width: min(100%, var(--container-default));
+  margin-inline: auto;
+}
+
+.reading-width {
+  width: min(100%, var(--container-narrow));
+}
+
+
+/* ==========================================================================
+   6. SECTIONS
+   ========================================================================== */
+
+.section {
+  width: 100%;
+  padding-block: var(--section-space-default);
+}
+
+.section-small {
+  width: 100%;
+  padding-block: var(--section-space-small);
+}
+
+.section-large {
+  width: 100%;
+  padding-block: var(--section-space-large);
+}
+
+.section-flush {
+  padding-block: 0;
+}
+
+.section-top-flush {
+  padding-top: 0;
+}
+
+.section-bottom-flush {
+  padding-bottom: 0;
+}
+
+
+/* ==========================================================================
+   7. FLOW AND VERTICAL RHYTHM
+   ========================================================================== */
+
+.flow > * + * {
+  margin-top: var(--flow-space, var(--space-md));
+}
+
+.flow-tight {
+  --flow-space: var(--space-xs);
+}
+
+.flow-small {
+  --flow-space: var(--space-sm);
+}
+
+.flow-medium {
+  --flow-space: var(--space-md);
+}
+
+.flow-large {
+  --flow-space: var(--space-lg);
+}
+
+.flow-extra-large {
+  --flow-space: var(--space-xl);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--stack-gap, var(--space-md));
+}
+
+.stack-tight {
+  --stack-gap: var(--space-xs);
+}
+
+.stack-small {
+  --stack-gap: var(--space-sm);
+}
+
+.stack-large {
+  --stack-gap: var(--space-lg);
+}
+
+.stack-extra-large {
+  --stack-gap: var(--space-xl);
+}
+
+
+/* ==========================================================================
+   8. FLEX ROWS
+   ========================================================================== */
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--row-gap, var(--space-md));
+}
+
+.row-nowrap {
+  flex-wrap: nowrap;
+}
+
+.row-reverse {
+  flex-direction: row-reverse;
+}
+
+.row-center {
+  align-items: center;
+}
+
+.row-start {
+  align-items: flex-start;
+}
+
+.row-end {
+  align-items: flex-end;
+}
+
+.row-stretch {
+  align-items: stretch;
+}
+
+.row-space-between {
+  justify-content: space-between;
+}
+
+.row-space-around {
+  justify-content: space-around;
+}
+
+.row-space-evenly {
+  justify-content: space-evenly;
+}
+
+.row-justify-center {
+  justify-content: center;
+}
+
+.row-justify-end {
+  justify-content: flex-end;
+}
+
+.row-tight {
+  --row-gap: var(--space-xs);
+}
+
+.row-small {
+  --row-gap: var(--space-sm);
+}
+
+.row-large {
+  --row-gap: var(--space-lg);
+}
+
+.row-extra-large {
+  --row-gap: var(--space-xl);
+}
+
+
+/* ==========================================================================
+   9. FLEX COLUMNS
+   ========================================================================== */
+
+.column {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+}
+
+.column-auto {
+  flex: 0 0 auto;
+}
+
+.column-grow {
+  flex: 1 1 auto;
+}
+
+.column-fixed {
+  flex: 0 0 var(--column-width, auto);
+}
+
+.column-full {
+  flex: 0 0 100%;
+  width: 100%;
+}
+
+
+/* ==========================================================================
+   10. RESPONSIVE COLUMN WIDTHS
+   ========================================================================== */
+
+.col-1 {
+  flex: 0 0 calc(8.333333% - var(--row-gap, 0px));
+}
+
+.col-2 {
+  flex: 0 0 calc(16.666667% - var(--row-gap, 0px));
+}
+
+.col-3 {
+  flex: 0 0 calc(25% - var(--row-gap, 0px));
+}
+
+.col-4 {
+  flex: 0 0 calc(33.333333% - var(--row-gap, 0px));
+}
+
+.col-5 {
+  flex: 0 0 calc(41.666667% - var(--row-gap, 0px));
+}
+
+.col-6 {
+  flex: 0 0 calc(50% - var(--row-gap, 0px));
+}
+
+.col-7 {
+  flex: 0 0 calc(58.333333% - var(--row-gap, 0px));
+}
+
+.col-8 {
+  flex: 0 0 calc(66.666667% - var(--row-gap, 0px));
+}
+
+.col-9 {
+  flex: 0 0 calc(75% - var(--row-gap, 0px));
+}
+
+.col-10 {
+  flex: 0 0 calc(83.333333% - var(--row-gap, 0px));
+}
+
+.col-11 {
+  flex: 0 0 calc(91.666667% - var(--row-gap, 0px));
+}
+
+.col-12 {
+  flex: 0 0 100%;
+}
+
+@media (max-width: 47.999rem) {
+  [class*="col-"] {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}
+
+
+/* ==========================================================================
+   11. CSS GRID
+   ========================================================================== */
+
+.grid {
+  display: grid;
+  gap: var(--grid-gap);
+}
+
+.grid-equal {
+  grid-auto-rows: 1fr;
+}
+
+.grid-center {
+  align-items: center;
+}
+
+.grid-start {
+  align-items: start;
+}
+
+.grid-end {
+  align-items: end;
+}
+
+.grid-stretch {
+  align-items: stretch;
+}
+
+.grid-justify-center {
+  justify-items: center;
+}
+
+.grid-justify-start {
+  justify-items: start;
+}
+
+.grid-justify-end {
+  justify-items: end;
+}
+
+.grid-tight {
+  --grid-gap: var(--space-xs);
+}
+
+.grid-small {
+  --grid-gap: var(--space-sm);
+}
+
+.grid-large {
+  --grid-gap: var(--space-xl);
+}
+
+.grid-extra-large {
+  --grid-gap: var(--space-2xl);
+}
+
+
+/* Fixed-column grids */
+
+.grid-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.grid-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.grid-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+
+/* Automatically wrapping grids */
+
+.grid-auto {
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(
+        min(100%, var(--grid-min-column-width)),
+        1fr
+      )
+    );
+}
+
+.grid-auto-fill {
+  grid-template-columns:
+    repeat(
+      auto-fill,
+      minmax(
+        min(100%, var(--grid-min-column-width)),
+        1fr
+      )
+    );
+}
+
+.grid-auto-small {
+  --grid-min-column-width: 12rem;
+}
+
+.grid-auto-medium {
+  --grid-min-column-width: 16rem;
+}
+
+.grid-auto-large {
+  --grid-min-column-width: 22rem;
+}
+
+.grid-auto-extra-large {
+  --grid-min-column-width: 30rem;
+}
+
+
+/* Responsive fixed-column fallback */
+
+@media (max-width: 63.999rem) {
+  .grid-5,
+  .grid-6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 47.999rem) {
+  .grid-3,
+  .grid-4,
+  .grid-5,
+  .grid-6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 35.999rem) {
+  .grid-2,
+  .grid-3,
+  .grid-4,
+  .grid-5,
+  .grid-6 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/* ==========================================================================
+   12. GRID COLUMN SPANS
+   ========================================================================== */
+
+.span-1 {
+  grid-column: span 1;
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
+.span-3 {
+  grid-column: span 3;
+}
+
+.span-4 {
+  grid-column: span 4;
+}
+
+.span-5 {
+  grid-column: span 5;
+}
+
+.span-6 {
+  grid-column: span 6;
+}
+
+.span-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 47.999rem) {
+  .span-3,
+  .span-4,
+  .span-5,
+  .span-6 {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 35.999rem) {
+  .span-2,
+  .span-3,
+  .span-4,
+  .span-5,
+  .span-6 {
+    grid-column: 1 / -1;
+  }
+}
+
+
+/* ==========================================================================
+   13. COMMON LAYOUT PATTERNS
+   ========================================================================== */
+
+/*
+   Cluster:
+   Horizontal group that wraps naturally.
+   Good for navigation, tags, actions, metadata.
+*/
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cluster-gap, var(--space-sm));
+}
+
+.cluster-space-between {
+  justify-content: space-between;
+}
+
+.cluster-center {
+  justify-content: center;
+}
+
+.cluster-end {
+  justify-content: flex-end;
+}
+
+
+/*
+   Split:
+   Two children separated to opposite sides.
+*/
+
+.split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+
+/*
+   Center:
+   Centers content horizontally and optionally vertically.
+*/
+
+.center {
+  display: grid;
+  place-items: center;
+}
+
+.center-horizontal {
+  margin-inline: auto;
+}
+
+.center-text {
+  text-align: center;
+}
+
+
+/*
+   Sidebar:
+   Flexible content with a fixed or minimum-width sidebar.
+*/
+
+.sidebar-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sidebar-gap, var(--space-xl));
+}
+
+.sidebar-layout > .sidebar {
+  flex-basis: var(--sidebar-width, 18rem);
+  flex-grow: 1;
+}
+
+.sidebar-layout > .sidebar-content {
+  flex-basis: 0;
+  flex-grow: 999;
+  min-width: min(100%, var(--sidebar-content-min, 50%));
+}
+
+
+/*
+   Reverse sidebar:
+   Main content first, sidebar second.
+*/
+
+.sidebar-layout-reverse {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: var(--sidebar-gap, var(--space-xl));
+}
+
+.sidebar-layout-reverse > .sidebar {
+  flex-basis: var(--sidebar-width, 18rem);
+  flex-grow: 1;
+}
+
+.sidebar-layout-reverse > .sidebar-content {
+  flex-basis: 0;
+  flex-grow: 999;
+  min-width: min(100%, var(--sidebar-content-min, 50%));
+}
+
+
+/*
+   Switcher:
+   Horizontal layout that becomes vertical when space is limited.
+*/
+
+.switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--switcher-gap, var(--space-lg));
+}
+
+.switcher > * {
+  flex-basis:
+    calc(
+      (var(--switcher-threshold, 48rem) - 100%) * 999
+    );
+  flex-grow: 1;
+}
+
+
+/*
+   Cover:
+   Vertically distributes content across a minimum-height region.
+*/
+
+.cover {
+  display: flex;
+  min-height: var(--cover-min-height, 70vh);
+  flex-direction: column;
+}
+
+.cover > .cover-main {
+  margin-block: auto;
+}
+
+
+/*
+   Reel:
+   Horizontal scrolling content.
+*/
+
+.reel {
+  display: flex;
+  max-width: 100%;
+  gap: var(--reel-gap, var(--space-md));
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: inline proximity;
+  scrollbar-gutter: stable;
+}
+
+.reel > * {
+  flex: 0 0 var(--reel-item-width, 18rem);
+  scroll-snap-align: start;
+}
+
+
+/*
+   Frame:
+   Maintains a media aspect ratio.
+*/
+
+.frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: var(--frame-ratio, 16 / 9);
+}
+
+.frame-square {
+  --frame-ratio: 1 / 1;
+}
+
+.frame-portrait {
+  --frame-ratio: 3 / 4;
+}
+
+.frame-landscape {
+  --frame-ratio: 4 / 3;
+}
+
+.frame-wide {
+  --frame-ratio: 16 / 9;
+}
+
+.frame-cinematic {
+  --frame-ratio: 21 / 9;
+}
+
+.frame > img,
+.frame > picture,
+.frame > video,
+.frame > iframe {
+  width: 100%;
+  height: 100%;
+}
+
+.frame > img,
+.frame > picture img,
+.frame > video {
+  object-fit: cover;
+}
+
+
+/*
+   Overlap:
+   Structural wrapper for layered content.
+*/
+
+.overlap {
+  display: grid;
+}
+
+.overlap > * {
+  grid-area: 1 / 1;
+}
+
+.overlap-content {
+  position: relative;
+  z-index: 1;
+}
+
+
+/* ==========================================================================
+   14. HEADER AND NAVIGATION SCAFFOLDING
+   ========================================================================== */
+
+.site-header {
+  position: relative;
+  z-index: var(--z-content);
+}
+
+.site-header-inner {
+  display: flex;
+  min-height: var(--header-min-height, 4rem);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.site-logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.site-logo img,
+.site-logo svg {
+  max-height: var(--logo-max-height, 3rem);
+  width: auto;
+}
+
+.site-nav {
+  min-width: 0;
+}
+
+.site-nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nav-gap, var(--space-lg));
+  list-style: none;
+}
+
+.site-nav-link {
+  display: inline-flex;
+  min-height: var(--touch-target-min);
+  align-items: center;
+}
+
+.site-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.mobile-menu-button {
+  display: none;
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 47.999rem) {
+  .site-header-inner {
+    flex-wrap: wrap;
+  }
+
+  .mobile-menu-button {
+    display: inline-flex;
+  }
+
+  .site-nav {
+    width: 100%;
+  }
+
+  .site-nav-list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .site-nav-link {
+    width: 100%;
+  }
+
+  .site-nav[hidden] {
+    display: none;
+  }
+}
+
+
+/* ==========================================================================
+   15. FOOTER SCAFFOLDING
+   ========================================================================== */
+
+.site-footer-inner {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.site-footer-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(
+        min(100%, 12rem),
+        1fr
+      )
+    );
+  gap: var(--space-xl);
+}
+
+.site-footer-nav {
+  list-style: none;
+}
+
+.site-footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+
+/* ==========================================================================
+   16. GENERIC COMPONENT STRUCTURES
+   Visual appearance belongs in design.css.
+   ========================================================================== */
+
+/*
+   Card:
+   Only handles layout. Borders, colors and shadows belong in design.css.
+*/
+
+.card {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+}
+
+.card-media {
+  flex: 0 0 auto;
+}
+
+.card-body {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.card-header,
+.card-footer {
+  flex: 0 0 auto;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: auto;
+}
+
+
+/*
+   Media object:
+   Image/icon beside content.
+*/
+
+.media-object {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--media-gap, var(--space-md));
+}
+
+.media-object-figure {
+  flex: 0 0 var(--media-width, auto);
+}
+
+.media-object-content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 35.999rem) {
+  .media-object-responsive {
+    flex-direction: column;
+  }
+
+  .media-object-responsive .media-object-figure {
+    width: 100%;
+  }
+}
+
+
+/*
+   Button group:
+   Structural grouping only.
+*/
+
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.button-group-stretch > * {
+  flex: 1 1 auto;
+}
+
+
+/*
+   List layouts.
+*/
+
+.list {
+  list-style: none;
+}
+
+.list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.list-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+
+/* ==========================================================================
+   17. FORMS
+   ========================================================================== */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.form-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(
+        min(100%, 16rem),
+        1fr
+      )
+    );
+  gap: var(--space-md);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.input,
+.select,
+.textarea,
+button {
+  min-height: var(--control-min-height);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  max-width: 100%;
+}
+
+.textarea {
+  min-height: 8rem;
+}
+
+.checkbox-group,
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.checkbox,
+.radio {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+.checkbox input,
+.radio input {
+  flex: 0 0 auto;
+  margin-top: 0.2em;
+}
+
+.field-help,
+.field-error {
+  display: block;
+}
+
+fieldset.form-group > legend {
+  margin-bottom: var(--space-xs);
+}
+
+
+/* ==========================================================================
+   18. TABLES
+   ========================================================================== */
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.table-wrapper table {
+  min-width: var(--table-min-width, 40rem);
+}
+
+th,
+td {
+  padding: var(--space-sm);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  font-weight: inherit;
+}
+
+
+/* ==========================================================================
+   19. MEDIA
+   ========================================================================== */
+
+.media-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-contain {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.image-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-contain {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.image-full {
+  width: 100%;
+}
+
+.image-center {
+  margin-inline: auto;
+}
+
+.background-cover {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.background-contain {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+
+/* ==========================================================================
+   20. POSITIONING
+   ========================================================================== */
+
+.position-relative {
+  position: relative;
+}
+
+.position-absolute {
+  position: absolute;
+}
+
+.position-fixed {
+  position: fixed;
+}
+
+.position-sticky {
+  position: sticky;
+}
+
+.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.inset-0 {
+  inset: 0;
+}
+
+.top-0 {
+  top: 0;
+}
+
+.right-0 {
+  right: 0;
+}
+
+.bottom-0 {
+  bottom: 0;
+}
+
+.left-0 {
+  left: 0;
+}
+
+
+/* ==========================================================================
+   21. ALIGNMENT
+   ========================================================================== */
+
+.align-start {
+  align-items: flex-start;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.align-end {
+  align-items: flex-end;
+}
+
+.align-stretch {
+  align-items: stretch;
+}
+
+.justify-start {
+  justify-content: flex-start;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-around {
+  justify-content: space-around;
+}
+
+.self-start {
+  align-self: flex-start;
+}
+
+.self-center {
+  align-self: center;
+}
+
+.self-end {
+  align-self: flex-end;
+}
+
+.self-stretch {
+  align-self: stretch;
+}
+
+
+/* ==========================================================================
+   22. SIZING
+   ========================================================================== */
+
+.width-full {
+  width: 100%;
+}
+
+.width-auto {
+  width: auto;
+}
+
+.height-full {
+  height: 100%;
+}
+
+.height-auto {
+  height: auto;
+}
+
+.min-width-0 {
+  min-width: 0;
+}
+
+.min-height-0 {
+  min-height: 0;
+}
+
+.min-height-screen {
+  min-height: 100vh;
+}
+
+.max-width-none {
+  max-width: none;
+}
+
+
+/* ==========================================================================
+   23. OVERFLOW
+   ========================================================================== */
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+.overflow-auto {
+  overflow: auto;
+}
+
+.overflow-x-auto {
+  overflow-x: auto;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+.overflow-visible {
+  overflow: visible;
+}
+
+
+/* ==========================================================================
+   24. TEXT ALIGNMENT AND WRAPPING
+   ========================================================================== */
+
+.text-left {
+  text-align: left;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.text-pretty {
+  text-wrap: pretty;
+}
+
+.text-nowrap {
+  white-space: nowrap;
+}
+
+.text-wrap {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-clamp-2,
+.line-clamp-3,
+.line-clamp-4 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.line-clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.line-clamp-3 {
+  -webkit-line-clamp: 3;
+}
+
+.line-clamp-4 {
+  -webkit-line-clamp: 4;
+}
+
+
+/* ==========================================================================
+   25. DISPLAY UTILITIES
+   ========================================================================== */
+
+.block {
+  display: block;
+}
+
+.inline {
+  display: inline;
+}
+
+.inline-block {
+  display: inline-block;
+}
+
+.flex {
+  display: flex;
+}
+
+.inline-flex {
+  display: inline-flex;
+}
+
+.grid-display {
+  display: grid;
+}
+
+.hidden {
+  display: none !important;
+}
+
+
+/* ==========================================================================
+   26. FLEX UTILITIES
+   ========================================================================== */
+
+.flex-row {
+  flex-direction: row;
+}
+
+.flex-column {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.flex-nowrap {
+  flex-wrap: nowrap;
+}
+
+.flex-1 {
+  flex: 1 1 0;
+}
+
+.flex-auto {
+  flex: 1 1 auto;
+}
+
+.flex-none {
+  flex: none;
+}
+
+.grow {
+  flex-grow: 1;
+}
+
+.no-grow {
+  flex-grow: 0;
+}
+
+.shrink {
+  flex-shrink: 1;
+}
+
+.no-shrink {
+  flex-shrink: 0;
+}
+
+
+/* ==========================================================================
+   27. GAP UTILITIES
+   ========================================================================== */
+
+.gap-none {
+  gap: 0;
+}
+
+.gap-3xs {
+  gap: var(--space-3xs);
+}
+
+.gap-2xs {
+  gap: var(--space-2xs);
+}
+
+.gap-xs {
+  gap: var(--space-xs);
+}
+
+.gap-sm {
+  gap: var(--space-sm);
+}
+
+.gap-md {
+  gap: var(--space-md);
+}
+
+.gap-lg {
+  gap: var(--space-lg);
+}
+
+.gap-xl {
+  gap: var(--space-xl);
+}
+
+.gap-2xl {
+  gap: var(--space-2xl);
+}
+
+.gap-3xl {
+  gap: var(--space-3xl);
+}
+
+
+/* ==========================================================================
+   28. MARGIN UTILITIES
+   Use sparingly. Prefer gap on parent layouts.
+   ========================================================================== */
+
+.margin-0 {
+  margin: 0;
+}
+
+.margin-auto {
+  margin: auto;
+}
+
+.margin-inline-auto {
+  margin-inline: auto;
+}
+
+.margin-top-auto {
+  margin-top: auto;
+}
+
+.margin-bottom-auto {
+  margin-bottom: auto;
+}
+
+.margin-top-sm {
+  margin-top: var(--space-sm);
+}
+
+.margin-top-md {
+  margin-top: var(--space-md);
+}
+
+.margin-top-lg {
+  margin-top: var(--space-lg);
+}
+
+.margin-top-xl {
+  margin-top: var(--space-xl);
+}
+
+.margin-bottom-sm {
+  margin-bottom: var(--space-sm);
+}
+
+.margin-bottom-md {
+  margin-bottom: var(--space-md);
+}
+
+.margin-bottom-lg {
+  margin-bottom: var(--space-lg);
+}
+
+.margin-bottom-xl {
+  margin-bottom: var(--space-xl);
+}
+
+
+/* ==========================================================================
+   29. PADDING UTILITIES
+   ========================================================================== */
+
+.padding-0 {
+  padding: 0;
+}
+
+.padding-sm {
+  padding: var(--space-sm);
+}
+
+.padding-md {
+  padding: var(--space-md);
+}
+
+.padding-lg {
+  padding: var(--space-lg);
+}
+
+.padding-xl {
+  padding: var(--space-xl);
+}
+
+.padding-inline-sm {
+  padding-inline: var(--space-sm);
+}
+
+.padding-inline-md {
+  padding-inline: var(--space-md);
+}
+
+.padding-inline-lg {
+  padding-inline: var(--space-lg);
+}
+
+.padding-block-sm {
+  padding-block: var(--space-sm);
+}
+
+.padding-block-md {
+  padding-block: var(--space-md);
+}
+
+.padding-block-lg {
+  padding-block: var(--space-lg);
+}
+
+
+/* ==========================================================================
+   30. ORDERING
+   ========================================================================== */
+
+.order-first {
+  order: -1;
+}
+
+.order-last {
+  order: 999;
+}
+
+@media (max-width: 47.999rem) {
+  .mobile-order-first {
+    order: -1;
+  }
+
+  .mobile-order-last {
+    order: 999;
+  }
+}
+
+
+/* ==========================================================================
+   31. RESPONSIVE VISIBILITY
+   Breakpoints:
+   - mobile: below 48rem
+   - tablet: 48rem through 63.999rem
+   - desktop: 64rem and above
+   ========================================================================== */
+
+.mobile-only,
+.tablet-only,
+.desktop-only {
+  display: none !important;
+}
+
+@media (max-width: 47.999rem) {
+  .mobile-only {
+    display: revert !important;
+  }
+
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 48rem) and (max-width: 63.999rem) {
+  .tablet-only {
+    display: revert !important;
+  }
+
+  .hide-tablet {
+    display: none !important;
+  }
+}
+
+@media (min-width: 64rem) {
+  .desktop-only {
+    display: revert !important;
+  }
+
+  .hide-desktop {
+    display: none !important;
+  }
+}
+
+
+/* ==========================================================================
+   32. RESPONSIVE LAYOUT HELPERS
+   ========================================================================== */
+
+@media (max-width: 47.999rem) {
+  .mobile-stack {
+    flex-direction: column;
+  }
+
+  .mobile-width-full {
+    width: 100%;
+  }
+
+  .mobile-text-left {
+    text-align: left;
+  }
+
+  .mobile-text-center {
+    text-align: center;
+  }
+
+  .mobile-hidden {
+    display: none !important;
+  }
+
+  .mobile-gap-sm {
+    gap: var(--space-sm);
+  }
+
+  .mobile-gap-md {
+    gap: var(--space-md);
+  }
+}
+
+@media (min-width: 48rem) {
+  .tablet-row {
+    flex-direction: row;
+  }
+
+  .tablet-text-left {
+    text-align: left;
+  }
+
+  .tablet-text-center {
+    text-align: center;
+  }
+}
+
+@media (min-width: 64rem) {
+  .desktop-row {
+    flex-direction: row;
+  }
+
+  .desktop-text-left {
+    text-align: left;
+  }
+
+  .desktop-text-center {
+    text-align: center;
+  }
+}
+
+
+/* ==========================================================================
+   33. PRINT
+   ========================================================================== */
+
+@media print {
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  body {
+    min-height: auto;
+  }
+
+  .site-header,
+  .site-footer,
+  .mobile-menu-button,
+  .no-print {
+    display: none !important;
+  }
+
+  .container,
+  .container-narrow,
+  .container-wide,
+  .container-full {
+    max-width: none;
+    padding-inline: 0;
+  }
+
+  .section,
+  .section-small,
+  .section-large {
+    padding-block: 1rem;
+  }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+  }
+
+  a[href^="#"]::after,
+  a[href^="javascript:"]::after {
+    content: "";
+  }
+
+  img,
+  svg,
+  video,
+  table,
+  pre,
+  blockquote {
+    break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+  }
+}

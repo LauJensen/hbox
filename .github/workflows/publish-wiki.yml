@@ -1,0 +1,62 @@
+name: Publish wiki
+
+on:
+#  push:
+#    branches:
+#      - main
+#    paths:
+#      - "docs/wiki/**"
+#      - ".github/workflows/publish-wiki.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Publish documentation to wiki
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          wiki_dir="$(mktemp -d)"
+
+          git clone \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" \
+            "$wiki_dir"
+
+          rsync \
+            --archive \
+            --delete \
+            --exclude=".git/" \
+            docs/wiki/ \
+            "$wiki_dir/"
+
+          git -C "$wiki_dir" config \
+            user.name "github-actions[bot]"
+
+          git -C "$wiki_dir" config \
+            user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git -C "$wiki_dir" add --all
+
+          if git -C "$wiki_dir" diff --cached --quiet; then
+            echo "Wiki is already up to date."
+            exit 0
+          fi
+
+          git -C "$wiki_dir" commit \
+            -m "Sync wiki from ${GITHUB_SHA::12}"
+
+          git -C "$wiki_dir" push
