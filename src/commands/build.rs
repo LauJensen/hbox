@@ -31,6 +31,11 @@ use crate::{
     templates::load_templates,
 };
 
+const SITE_CONF_TEMPLATE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/resources/nginx/site.conf"
+));
+
 #[derive(Debug)]
 struct SiteStylesheets {
     global_href: String,
@@ -107,6 +112,10 @@ pub fn build_site(site: &ResolvedSite) -> Result<BuildReport> {
         &stylesheets,
     )?;
 
+    if config.nginx.is_enabled() {
+        write_nginx_conf(&site, &config)?;
+    }
+
     publish::commit(site)?;
 
     eprintln!("Site built in: {:?}", start_time.elapsed());
@@ -116,6 +125,33 @@ pub fn build_site(site: &ResolvedSite) -> Result<BuildReport> {
         pages_built,
         blogposts_built,
     })
+}
+
+fn write_nginx_conf(
+    site:   &ResolvedSite,
+    config: &SiteConfig,
+) -> Result<()> {
+    let domains = config.nginx.domains_as_str();
+    let access_log = config
+        .nginx
+        .access_log_directive(&site.site_name);
+
+    let site_nginx_conf = SITE_CONF_TEMPLATE
+        .replace("%DOMAINS%", &domains)
+        .replace("%SITENAME%", &site.site_name)
+        .replace("%ACCESS_LOG%", &access_log);
+
+    let conf_file_path = site
+        .output_staging_dir()
+        .join("nginx.conf");
+
+    std::fs::write(&conf_file_path, site_nginx_conf)
+        .with_context(|| {
+            format!(
+                "failed to write nginx configuration {}",
+                conf_file_path.display()
+            )
+        })
 }
 
 /// Verifies the site root and its required configuration and stylesheet inputs.

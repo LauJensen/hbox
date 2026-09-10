@@ -15,7 +15,39 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SiteConfig {
     pub site: SiteInfo,
+
+    #[serde(default)]
+    pub nginx: NginxConfig,
 }
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NginxConfig {
+    pub domains: Vec<String>,
+    pub access_log: bool,
+}
+
+impl NginxConfig {
+    pub fn is_enabled(&self) -> bool {
+        !self.domains.is_empty()
+    }
+
+    pub fn domains_as_str(&self) -> String {
+        self.domains.join(" ")
+    }
+
+    pub fn access_log_directive(&self, site_name: &str) -> String {
+        if self.access_log {
+            format!(
+                "access_log /var/log/nginx/{site_name}.access.log \
+                 main buffer=64k flush=5s;"
+                    )
+        } else {
+            "access_log off;".to_owned()
+        }
+    }
+}
+
 
 impl SiteConfig {
     fn validate(&self) -> Result<()> {
@@ -39,7 +71,7 @@ const DIST_DIR: &str = "dist";
 /// Instances can only be constructed through `ResolvedSite::resolve`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedSite {
-    site_name:          String,
+    pub site_name:      String,
     source_dir:         PathBuf,
     output_dir:         PathBuf,
     output_backup_dir:  PathBuf,
