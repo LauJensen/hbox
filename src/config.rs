@@ -119,7 +119,7 @@ impl ResolvedSite {
 
     /// Returns the site name for a numbered preview.
     pub fn preview_name(&self, index: NonZeroU32) -> String {
-        format!("{}-preview{index}", self.site_name)
+        format!(".preview-{}-{index}", self.site_name)
     }
 
     /// Resolves a numbered preview belonging to this site.

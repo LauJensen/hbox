@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     fs,
     io,
+    num::NonZeroU32,
     path::{Component, Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -104,7 +105,7 @@ pub async fn run(args: UpdateDesignArgs) -> Result<()> {
     println!("Update successfully generated.");
     println!();
     println!("To preview and/or accept use the following:");
-    println!("- hbox preview {site_name}-preview{preview_num}");
+    println!("- hbox preview {site_name} {preview_num}");
     println!("- hbox accept {site_name} {preview_num}");
 
     Ok(())
@@ -248,7 +249,7 @@ fn validate_update(update: &SiteUpdate) -> Result<()> {
 /// Creates the first available sibling directory named `<site>-previewN`.
 fn create_preview_site_dir(
     source_site: &ResolvedSite,
-) -> Result<(String, ResolvedSite, usize)> {
+) -> Result<(String, ResolvedSite, NonZeroU32)> {
     let parent = source_site
         .source_dir()
         .parent()
@@ -258,17 +259,10 @@ fn create_preview_site_dir(
             )
         })?;
 
-    let site_name = source_site
-        .source_dir()
-        .file_name()
-        .and_then(|name| name.to_str())
-        .with_context(|| {
-            format!("Invalid site name: {source_site}")
-        })?;
+    for number in 1u32.. {
+        let number = NonZeroU32::new(number).unwrap();
 
-    for number in 1usize.. {
-        let preview_name =
-            format!("{site_name}-preview{number}");
+        let preview_name = &source_site.preview_name(number);
 
         let preview_source_dir =
             parent.join(&preview_name);
@@ -278,7 +272,7 @@ fn create_preview_site_dir(
 
         match fs::create_dir(&preview_site.source_dir()) {
             Ok(()) => {
-                return Ok((preview_name, preview_site, number));
+                return Ok((preview_name.to_owned(), preview_site, number));
             }
 
             Err(error)

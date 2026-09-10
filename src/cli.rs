@@ -79,7 +79,7 @@ pub struct AcceptPreviewArgs {
 
     /// Preview number to accept
     #[arg(index=2)]
-    pub preview_num: u32,
+    pub preview_num: NonZeroU32,
 }
 
 #[derive(Debug, Args)]

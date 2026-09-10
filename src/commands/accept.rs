@@ -21,7 +21,7 @@ use anyhow::{Context, Result,bail};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Preview {
-    pub index: u32,
+    pub index: NonZeroU32,
     pub path: PathBuf,
 }
 
@@ -53,8 +53,7 @@ pub async fn run(args: AcceptPreviewArgs) -> Result<()> {
     let staging_dir = sites_path.join(format!(".{}-accepting", site.site_name()));
     let backup_dir = sites_path.join(format!(".{}-backup", site.site_name()));
 
-    let accepted_site = site.preview(NonZeroU32::new(args.preview_num)
-        .expect("Preview numbering starts at 1"));
+    let accepted_site = site.preview(args.preview_num);
     let build_report = build_site(&accepted_site)
         .context("failed to build accepted site")?;
 
@@ -123,10 +122,7 @@ pub async fn run(args: AcceptPreviewArgs) -> Result<()> {
     for preview in &previews {
         println!("- removing all artifacts for {}", preview.path.display());
 
-        let preview_site = ResolvedSite::resolve(&preview.path)
-            .with_context(|| {
-                format!("failed to resolve preview {}", preview.path.display())
-            })?;
+        let preview_site = site.preview(preview.index);
 
         remove_artifacts(&preview_site)
             .with_context(|| {
@@ -142,8 +138,8 @@ pub async fn run(args: AcceptPreviewArgs) -> Result<()> {
 
 /// Extracts the numeric preview index from a folder named
 /// `<site_name>-preview<N>`.
-fn parse_preview_index(site_name: &str, folder_name: &str) -> Option<u32> {
-    let prefix = format!("{site_name}-preview");
+fn parse_preview_index(site_name: &str, folder_name: &str) -> Option<NonZeroU32> {
+    let prefix = format!(".preview-{site_name}-");
     let suffix = folder_name.strip_prefix(&prefix)?;
 
     if suffix.is_empty() {
