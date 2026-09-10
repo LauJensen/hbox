@@ -86,15 +86,15 @@ pub fn build_site(site: &ResolvedSite) -> Result<BuildReport> {
     let stylesheets =
         build_site_stylesheets(site_dir, &output_dir)?;
 
-    let mut env = minijinja::Environment::new();
+    let mut env = load_templates(site_dir)?;
 
     add_markdown_filter(
         &mut env,
         config.site.code_theme
     );
-    env.set_loader(minijinja::path_loader(site_dir));
 
     let (blogposts_built, blogpost_summaries) = build_blogposts(
+        &env,
         site_dir,
         &blogposts_dir,
         &config,
@@ -566,6 +566,7 @@ fn render_html_pages(
 
         let rendered = template
             .render(context! {
+                site => &config.site,
                 posts => formatted_posts,
             })
             .with_context(|| format!("Failed to render page {}", source.display()))?;
@@ -581,10 +582,8 @@ fn render_html_pages(
 
         let final_html = if css_source.is_file() {
             println!("Page {} has custom CSS", source.display());
-
-            let page_css = fs::read_to_string(&css_source).with_context(|| {
-                format!("Failed to read page CSS: {}", css_source.display())
-            })?;
+            // fs::read_to_string(&css_source).with_context(|| {
+            let page_css = minify_stylesheet_source(&css_source)?;
 
             inline_page_css(&rendered, &page_css)?
         } else if css_source.exists() {
@@ -732,6 +731,7 @@ fn content_hash(content: &str) -> String {
 
 /// Loads, orders, summarizes, and renders all published blog posts.
 fn build_blogposts(
+    env: &minijinja::Environment<'_>,
     site_dir: &Path,
     blogposts_dir: &Path,
     config: &SiteConfig,
@@ -769,8 +769,6 @@ fn build_blogposts(
     }
 
     validate_unique_urls(&blogposts)?;
-
-    let env = load_templates(site_dir)?;
 
     let mut post_summaries: Vec<PostSummary> =
         blogposts.iter().map(PostSummary::from).collect();
