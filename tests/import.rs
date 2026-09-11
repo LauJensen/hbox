@@ -75,7 +75,7 @@ fn import_writes_a_complete_preview_build_and_cache() {
     assert_success(&output);
     assert!(
         stdout(&output).contains(
-            "Imported design into sites/integration.test-preview1"
+            "Imported design into sites/.preview-integration.test-1"
         ),
         "unexpected stdout:\n{}",
         stdout(&output)
@@ -293,7 +293,7 @@ fn import_uses_the_next_available_preview_number() {
     assert_success(&output);
     assert!(
         stdout(&output).contains(
-            "Imported design into sites/integration.test-preview2"
+            "Imported design into sites/.preview-integration.test-2"
         )
     );
     assert_eq!(mock.finish().len(), 2);
@@ -655,10 +655,9 @@ fn import_cleans_up_when_the_asset_manifest_is_unsafe() {
     let fixture = Fixture::initialized();
     let unsafe_asset = json!({
         "filename": "../escape.svg",
-        "path": "/images/escape.svg",
         "kind": "svg",
         "description": "Must be rejected",
-        "generation_prompt": "",
+        "generation_prompt": "An SVG fixture with an unsafe filename",
         "size": "auto",
         "svg_code": SVG_SOURCE
     });
@@ -680,7 +679,10 @@ fn import_cleans_up_when_the_asset_manifest_is_unsafe() {
         "about",
     );
 
-    assert_failure_contains(&output, "invalid asset filename");
+    assert_failure_contains(
+        &output,
+        "assets[0] ('../escape.svg'): invalid filename",
+    );
     assert_no_preview_artifacts(&fixture, SITE_NAME, 1);
     assert_original_has_no_import(&fixture);
     assert!(!fixture.root.join("escape.svg").exists());
@@ -692,7 +694,6 @@ fn import_cleans_up_when_image_generation_fails() {
     let fixture = Fixture::initialized();
     let image_asset = json!({
         "filename": "hero.png",
-        "path": "/images/hero.png",
         "kind": "image",
         "description": "Test hero",
         "generation_prompt": "A tiny gold test square",
@@ -815,13 +816,13 @@ impl Fixture {
     }
 
     fn preview_source(&self, site_name: &str, index: u32) -> PathBuf {
-        self.site_source(&format!("{site_name}-preview{index}"))
+        self.site_source(&format!(".preview-{site_name}-{index}"))
     }
 
     fn preview_output(&self, site_name: &str, index: u32) -> PathBuf {
         self.root
             .join("dist")
-            .join(format!("{site_name}-preview{index}"))
+            .join(format!(".preview-{site_name}-{index}"))
     }
 
     fn preview_staging_output(
@@ -831,7 +832,7 @@ impl Fixture {
     ) -> PathBuf {
         self.root
             .join("dist")
-            .join(format!(".{site_name}-preview{index}.staging"))
+            .join(format!("..preview-{site_name}-{index}.staging"))
     }
 
     fn preview_backup_output(
@@ -841,7 +842,7 @@ impl Fixture {
     ) -> PathBuf {
         self.root
             .join("dist")
-            .join(format!(".{site_name}-preview{index}.backup"))
+            .join(format!("..preview-{site_name}-{index}.backup"))
     }
 }
 
@@ -1049,7 +1050,6 @@ fn complete_asset_manifest() -> Vec<Value> {
     vec![
         json!({
             "filename": "hero.png",
-            "path": "/images/hero.png",
             "kind": "image",
             "description": "Test hero",
             "generation_prompt": "A tiny gold test square",
@@ -1058,19 +1058,17 @@ fn complete_asset_manifest() -> Vec<Value> {
         }),
         json!({
             "filename": "brand/mark.svg",
-            "path": "/images/brand/mark.svg",
             "kind": "svg",
             "description": "Test brand mark",
-            "generation_prompt": "",
+            "generation_prompt": "svg mark",
             "size": "auto",
             "svg_code": SVG_SOURCE
         }),
         json!({
             "filename": "generated-glow",
-            "path": "/images/generated-glow",
             "kind": "css_generated",
             "description": "Rendered by CSS",
-            "generation_prompt": "",
+            "generation_prompt": "css blob",
             "size": "auto",
             "svg_code": ""
         }),

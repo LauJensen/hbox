@@ -1,9 +1,8 @@
 use std::{
-    collections::HashSet,
     fs,
     io,
     num::NonZeroU32,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -16,15 +15,16 @@ use crate::assets::{
     install_assets,
     remove_staging_dir,
     safe_relative_path,
+    validate_manifest,
 };
 
 use crate::{
-    ai::{chatgpt::ChatGptClient, AiConfig, AssetKind, AssetsManifest},
-    config::{ResolvedSite},
+    ai::{chatgpt::ChatGptClient, AiConfig, AssetsManifest},
+    config::ResolvedSite,
     cli::UpdateDesignArgs,
     previews::remove_artifacts,
     commands::build::build_site,
-    utils::{copy_all},
+    utils::copy_all,
 };
 
 const UPDATE_SYSTEM_PROMPT: &str = include_str!("../../resources/prompts/update.txt");
@@ -82,10 +82,8 @@ pub async fn run(args: UpdateDesignArgs) -> Result<()> {
     validate_update(&update)?;
     cache_prompt(&source_site, &args.slug, &args.prompt)?;
 
-    let resolved_source_site = ResolvedSite::resolve(&args.site_name)?;
-
-    let (_preview_name, preview_site, preview_num) =
-        create_preview_site_dir(&resolved_source_site)?;
+    let (preview_site, preview_num) =
+        create_preview_site_dir(&site)?;
     let result = create_and_build_preview(
         &client,
         &source_site,
@@ -96,17 +94,29 @@ pub async fn run(args: UpdateDesignArgs) -> Result<()> {
     .await;
 
     if let Err(error) = result {
-        remove_artifacts(&preview_site)?;
-        return Err(error);
+        return match remove_artifacts(&preview_site) {
+            Ok(()) => Err(error),
+
+            Err(cleanup_error) => Err(error.context(format!(
+                "update failed, and cleanup of {} also failed: \
+                 {cleanup_error:#}",
+                preview_site,
+            ))),
+        };
     }
 
-    let site_name = &args.site_name.display();
     println!();
     println!("Update successfully generated.");
     println!();
     println!("To preview and/or accept use the following:");
-    println!("- hbox preview {site_name} {preview_num}");
-    println!("- hbox accept {site_name} {preview_num}");
+    println!(
+        "- hbox preview {} {preview_num}",
+        site.site_name()
+    );
+    println!(
+        "- hbox accept {} {preview_num}",
+        site.site_name()
+    );
 
     Ok(())
 }
@@ -212,67 +222,24 @@ fn validate_update(update: &SiteUpdate) -> Result<()> {
         }
     }
 
-    let mut filenames = HashSet::new();
-    let mut paths = HashSet::new();
-
-    for asset in &update.assets_manifest.assets {
-        safe_relative_path(&asset.filename)
-            .with_context(|| format!("Unsafe asset filename: {}", asset.filename))?;
-
-        let relative = safe_relative_path(asset.path.trim_start_matches('/'))
-            .with_context(|| format!("Unsafe asset path: {}", asset.path))?;
-        if relative.components().next().and_then(normal_component) != Some("images") {
-            bail!("Asset path must begin with /images/: {}", asset.path);
-        }
-
-        if !filenames.insert(asset.filename.clone()) {
-            bail!("Duplicate asset filename: {}", asset.filename);
-        }
-        if !paths.insert(asset.path.clone()) {
-            bail!("Duplicate asset path: {}", asset.path);
-        }
-
-        match &asset.kind {
-            AssetKind::Svg if asset.svg_code.trim().is_empty() => {
-                bail!("SVG asset has no svg_code: {}", asset.filename)
-            }
-            AssetKind::Image if asset.generation_prompt.trim().is_empty() => {
-                bail!("Image asset has no generation_prompt: {}", asset.filename)
-            }
-            _ => {}
-        }
-    }
+    validate_manifest(&update.assets_manifest)
+        .context("OpenAI returned an invalid assets manifest")?;
 
     Ok(())
 }
 
-/// Creates the first available sibling directory named `<site>-previewN`.
+/// Creates the first available numbered preview directory.
 fn create_preview_site_dir(
     source_site: &ResolvedSite,
-) -> Result<(String, ResolvedSite, NonZeroU32)> {
-    let parent = source_site
-        .source_dir()
-        .parent()
-        .with_context(|| {
-            format!(
-                "Site has no parent directory: {source_site}"
-            )
-        })?;
-
+) -> Result<(ResolvedSite, NonZeroU32)> {
     for number in 1u32.. {
-        let number = NonZeroU32::new(number).unwrap();
-
-        let preview_name = &source_site.preview_name(number);
-
-        let preview_source_dir =
-            parent.join(&preview_name);
-
-        let preview_site =
-            ResolvedSite::resolve(&preview_source_dir)?;
+        let index = NonZeroU32::new(number)
+            .expect("preview numbering starts at one");
+        let preview_site = source_site.preview(index);
 
         match fs::create_dir(&preview_site.source_dir()) {
             Ok(()) => {
-                return Ok((preview_name.to_owned(), preview_site, number));
+                return Ok((preview_site, index));
             }
 
             Err(error)
@@ -355,13 +322,6 @@ fn validate_slug(slug: &str) -> Result<()> {
     Ok(())
 }
 
-fn normal_component<'a>(component: Component<'a>) -> Option<&'a str> {
-    match component {
-        Component::Normal(value) => value.to_str(),
-        _ => None,
-    }
-}
-
 fn update_schema() -> Value {
     json!({
         "type": "object",
@@ -379,7 +339,6 @@ fn update_schema() -> Value {
                             "type": "object",
                             "properties": {
                                 "filename": { "type": "string" },
-                                "path": { "type": "string" },
                                 "kind": {
                                     "type": "string",
                                     "enum": ["image", "svg", "css_generated"]
@@ -400,7 +359,6 @@ fn update_schema() -> Value {
                             },
                             "required": [
                                 "filename",
-                                "path",
                                 "kind",
                                 "description",
                                 "generation_prompt",

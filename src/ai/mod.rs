@@ -67,7 +67,10 @@ pub struct AssetManifestItem {
     pub filename: String,
     pub kind: AssetKind,
     pub description: String,
+
+    #[serde(default)]
     pub generation_prompt: String,
+
     pub size: Option<String>,
     #[serde(default)]
     pub svg_code: String,

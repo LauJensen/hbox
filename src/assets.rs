@@ -160,12 +160,6 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
             }
 
             AssetKind::Svg => {
-                if asset.generation_prompt.trim().is_empty() {
-                    problems.push(format!(
-                        "{label}: SVG generation prompt must not be empty"
-                    ));
-                }
-
                 if asset.svg_code.trim().is_empty() {
                     problems.push(format!(
                         "{label}: SVG source must not be empty"

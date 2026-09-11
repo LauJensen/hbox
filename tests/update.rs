@@ -91,9 +91,7 @@ fn update_replaces_files_assets_builds_preview_and_caches_prompt() {
     let output_text = stdout(&output);
     assert!(output_text.contains("Generating update for index..."));
     assert!(output_text.contains("Update successfully generated."));
-    assert!(
-        output_text.contains("- hbox preview integration.test-preview1")
-    );
+    assert!(output_text.contains("- hbox preview integration.test 1"));
     assert!(output_text.contains("- hbox accept integration.test 1"));
 
     let requests = mock.finish();
@@ -258,7 +256,7 @@ fn update_replaces_files_assets_builds_preview_and_caches_prompt() {
     let built_page = read_text(output_dir.join("index.html"));
     assert!(built_page.contains("complete-update"));
     assert!(built_page.contains(r#"id="hbox-page-css""#));
-    assert!(built_page.contains(UPDATED_PAGE_CSS));
+    assert!(built_page.contains(".updated-page{color:purple}"));
     assert!(built_page.contains(r#"href="/global.css""#));
     assert!(built_page.contains(r#"href="/design."#));
     assert!(output_dir.join("images/hero.png").is_file());
@@ -337,7 +335,7 @@ fn null_optional_replacements_preserve_existing_files() {
     let built_page =
         read_text(fixture.preview_output(SITE_NAME, 1).join("index.html"));
     assert!(built_page.contains("html-only-update"));
-    assert!(built_page.contains(ORIGINAL_PAGE_CSS));
+    assert!(built_page.contains("#original-page{color:navy}"));
     assert_no_transient_output_artifacts(&fixture, SITE_NAME, 1);
 }
 
@@ -373,9 +371,7 @@ fn update_uses_the_next_available_preview_number() {
     assert_success(&output);
     assert_eq!(mock.finish().len(), 1);
     let output_text = stdout(&output);
-    assert!(
-        output_text.contains("- hbox preview integration.test-preview2")
-    );
+    assert!(output_text.contains("- hbox preview integration.test 2"));
     assert!(output_text.contains("- hbox accept integration.test 2"));
 
     assert_eq!(
@@ -582,7 +578,6 @@ fn image_failure_removes_preview_but_keeps_the_used_prompt() {
     let prompt = "Generate an image that will fail";
     let image_asset = json!({
         "filename": "hero.png",
-        "path": "/images/hero.png",
         "kind": "image",
         "description": "Replacement hero",
         "generation_prompt": "A deliberately failing image",
@@ -716,13 +711,13 @@ impl Fixture {
     }
 
     fn preview_source(&self, site_name: &str, index: u32) -> PathBuf {
-        self.site_source(&format!("{site_name}-preview{index}"))
+        self.site_source(&format!(".preview-{site_name}-{index}"))
     }
 
     fn preview_output(&self, site_name: &str, index: u32) -> PathBuf {
         self.root
             .join("dist")
-            .join(format!("{site_name}-preview{index}"))
+            .join(format!(".preview-{site_name}-{index}"))
     }
 
     fn preview_staging_output(
@@ -732,7 +727,7 @@ impl Fixture {
     ) -> PathBuf {
         self.root
             .join("dist")
-            .join(format!(".{site_name}-preview{index}.staging"))
+            .join(format!("..preview-{site_name}-{index}.staging"))
     }
 
     fn preview_backup_output(
@@ -742,7 +737,7 @@ impl Fixture {
     ) -> PathBuf {
         self.root
             .join("dist")
-            .join(format!(".{site_name}-preview{index}.backup"))
+            .join(format!("..preview-{site_name}-{index}.backup"))
     }
 }
 
@@ -1013,7 +1008,6 @@ fn complete_asset_manifest() -> Vec<Value> {
     vec![
         json!({
             "filename": "hero.png",
-            "path": "/images/hero.png",
             "kind": "image",
             "description": "Replacement hero",
             "generation_prompt": "A wide deterministic golden hero",
@@ -1022,19 +1016,17 @@ fn complete_asset_manifest() -> Vec<Value> {
         }),
         json!({
             "filename": "icons/plus.svg",
-            "path": "/images/icons/plus.svg",
             "kind": "svg",
             "description": "New plus icon",
-            "generation_prompt": "",
+            "generation_prompt": "A minimal plus icon rendered as an SVG",
             "size": null,
             "svg_code": SVG_SOURCE
         }),
         json!({
             "filename": "generated-glow",
-            "path": "/images/generated-glow",
             "kind": "css_generated",
             "description": "Rendered with CSS",
-            "generation_prompt": "",
+            "generation_prompt": "A decorative glow rendered entirely with CSS",
             "size": null,
             "svg_code": ""
         }),
@@ -1066,35 +1058,23 @@ fn invalid_update_cases() -> Vec<(Value, &'static str)> {
 
     let mut unsafe_filename = valid_update("unsafe-filename");
     unsafe_filename["assets_manifest"]["assets"] = json!([
-        svg_asset("../escape.svg", "/images/escape.svg", SVG_SOURCE)
-    ]);
-
-    let mut wrong_asset_root = valid_update("wrong-asset-root");
-    wrong_asset_root["assets_manifest"]["assets"] = json!([
-        svg_asset("escape.svg", "/styles/escape.svg", SVG_SOURCE)
+        svg_asset("../escape.svg", SVG_SOURCE)
     ]);
 
     let mut duplicate_filename = valid_update("duplicate-filename");
     duplicate_filename["assets_manifest"]["assets"] = json!([
-        svg_asset("same.svg", "/images/one.svg", SVG_SOURCE),
-        svg_asset("same.svg", "/images/two.svg", SVG_SOURCE)
-    ]);
-
-    let mut duplicate_path = valid_update("duplicate-path");
-    duplicate_path["assets_manifest"]["assets"] = json!([
-        svg_asset("one.svg", "/images/same.svg", SVG_SOURCE),
-        svg_asset("two.svg", "/images/same.svg", SVG_SOURCE)
+        svg_asset("same.svg", SVG_SOURCE),
+        svg_asset("same.svg", SVG_SOURCE)
     ]);
 
     let mut empty_svg = valid_update("empty-svg");
     empty_svg["assets_manifest"]["assets"] = json!([
-        svg_asset("empty.svg", "/images/empty.svg", "   ")
+        svg_asset("empty.svg", "   ")
     ]);
 
     let mut empty_image_prompt = valid_update("empty-image-prompt");
     empty_image_prompt["assets_manifest"]["assets"] = json!([{
         "filename": "empty.png",
-        "path": "/images/empty.png",
         "kind": "image",
         "description": "Invalid image",
         "generation_prompt": "   ",
@@ -1119,25 +1099,25 @@ fn invalid_update_cases() -> Vec<(Value, &'static str)> {
             empty_global_css,
             "global_css must be null or a non-empty string",
         ),
-        (unsafe_filename, "Unsafe asset filename"),
-        (wrong_asset_root, "Asset path must begin with /images/"),
-        (duplicate_filename, "Duplicate asset filename"),
-        (duplicate_path, "Duplicate asset path"),
-        (empty_svg, "SVG asset has no svg_code"),
+        (unsafe_filename, "assets[0] ('../escape.svg'): invalid filename"),
+        (
+            duplicate_filename,
+            "assets[1] ('same.svg'): duplicate staged filename",
+        ),
+        (empty_svg, "assets[0] ('empty.svg'): SVG source must not be empty"),
         (
             empty_image_prompt,
-            "Image asset has no generation_prompt",
+            "assets[0] ('empty.png'): image generation prompt must not be empty",
         ),
     ]
 }
 
-fn svg_asset(filename: &str, path: &str, svg_code: &str) -> Value {
+fn svg_asset(filename: &str, svg_code: &str) -> Value {
     json!({
         "filename": filename,
-        "path": path,
         "kind": "svg",
         "description": "Test SVG",
-        "generation_prompt": "",
+        "generation_prompt": "A deterministic SVG fixture",
         "size": null,
         "svg_code": svg_code
     })
