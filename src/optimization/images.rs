@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use anyhow::{bail, Context, Result};
@@ -14,11 +15,15 @@ use image::{
     GenericImageView,
     ImageFormat,
 };
+use indicatif::{ProgressBar, ProgressStyle};
 use kuchiki::traits::*;
 use rayon::prelude::*;
 use walkdir::WalkDir;
 
 const WEBP_QUALITY: f32 = 82.0;
+const PROGRESS_TICK_RATE: Duration = Duration::from_millis(100);
+const PROGRESS_TEMPLATE: &str =
+    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}";
 
 #[derive(Debug, Clone)]
 pub struct ImageResult {
@@ -64,13 +69,55 @@ pub fn build_results_by_path(
     html_paths: &[PathBuf],
 ) -> Result<ResultsByPath> {
     let jobs = collect_image_jobs(dist_site_dir, html_paths)?;
+    let progress = image_progress(jobs.len())?;
+
+    if jobs.is_empty() {
+        progress.finish_with_message("No images to optimize");
+        return Ok(HashMap::new());
+    }
 
     let results = jobs
         .par_iter()
-        .map(|image_path| optimize_image(image_path))
-        .collect::<Result<Vec<_>>>()?;
+        .map(|image_path| {
+            let result = optimize_image(image_path);
 
-    Ok(results.into_iter().collect())
+            if result.is_ok() {
+                progress.inc(1);
+            }
+
+            result
+        })
+        .collect::<Result<Vec<_>>>();
+
+    match results {
+        Ok(results) => {
+            progress.finish_with_message(format!(
+                "Optimized {} images",
+                results.len()
+            ));
+
+            Ok(results.into_iter().collect())
+        }
+        Err(error) => {
+            progress.abandon_with_message("Image optimization failed");
+            Err(error)
+        }
+    }
+}
+
+fn image_progress(total: usize) -> Result<ProgressBar> {
+    let total = u64::try_from(total)
+        .context("Deduplicated image count does not fit in u64")?;
+
+    let progress = ProgressBar::new(total);
+    progress.set_style(
+        ProgressStyle::with_template(PROGRESS_TEMPLATE)?
+            .progress_chars("#>-"),
+    );
+    progress.set_message("Optimizing images");
+    progress.enable_steady_tick(PROGRESS_TICK_RATE);
+
+    Ok(progress)
 }
 
 /// Rewrites one HTML file using image artifacts that have already been built.
