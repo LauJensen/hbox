@@ -21,6 +21,7 @@ use crate::{cli::PreviewArgs};
 
 use crate::{
     config::{ResolvedSite},
+    commands::build,
 };
 
 const EDITOR_JS: &str = include_str!("../../resources/editor.js");
@@ -38,8 +39,10 @@ pub async fn run(args: PreviewArgs) -> Result<()> {
         None        => site,
     };
 
-    //eprintln!("Building site: {}", &args.site.display());
-    //let report = build::build_site(&site)?;
+    if !site.output_dir().exists() {
+        eprintln!("Building site: {}", &args.site.display());
+        build::build_site(&site)?;
+    }
     let watched_site = site.clone();
 
     //optimize::optimize(&site.output_dir);

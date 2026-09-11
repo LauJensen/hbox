@@ -1,5 +1,3 @@
-
-
 use std::{
     ffi::OsStr,
     collections::HashSet,
