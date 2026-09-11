@@ -12,12 +12,32 @@ use crate::rendering::highlighting::CodeTheme;
 use anyhow::{bail,Context, Result};
 use serde::{Deserialize, Serialize};
 
+const DEFAULT_WEBP_QUALITY: u8 = 82;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SiteConfig {
     pub site: SiteInfo,
 
     #[serde(default)]
     pub nginx: NginxConfig,
+
+    #[serde(default)]
+    pub optimizations: OptimizationConfig,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OptimizationConfig {
+    pub webp_quality: u8,
+}
+
+impl Default for OptimizationConfig {
+    fn default() -> Self {
+        Self {
+            webp_quality: DEFAULT_WEBP_QUALITY,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -58,6 +78,13 @@ impl SiteConfig {
                 .any(|item| matches!(item, Item::Error))
         {
             bail!("invalid site.date_format: {format:?}");
+        }
+
+        if self.optimizations.webp_quality > 100 {
+            bail!(
+                "optimizations.webp_quality must be between 0 and 100, got {}",
+                self.optimizations.webp_quality
+            );
         }
 
         Ok(())

@@ -20,7 +20,6 @@ use kuchiki::traits::*;
 use rayon::prelude::*;
 use walkdir::WalkDir;
 
-const WEBP_QUALITY: f32 = 82.0;
 const PROGRESS_TICK_RATE: Duration = Duration::from_millis(100);
 const PROGRESS_TEMPLATE: &str =
     "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}";
@@ -67,6 +66,7 @@ pub fn find_dist_html_files(path: &Path) -> Result<Vec<PathBuf>> {
 pub fn build_results_by_path(
     dist_site_dir: &Path,
     html_paths: &[PathBuf],
+    webp_quality: u8,
 ) -> Result<ResultsByPath> {
     let jobs = collect_image_jobs(dist_site_dir, html_paths)?;
     let progress = image_progress(jobs.len())?;
@@ -79,7 +79,7 @@ pub fn build_results_by_path(
     let results = jobs
         .par_iter()
         .map(|image_path| {
-            let result = optimize_image(image_path);
+            let result = optimize_image(image_path, webp_quality);
 
             if result.is_ok() {
                 progress.inc(1);
@@ -230,6 +230,7 @@ fn collect_image_jobs(
 
 fn optimize_image(
     image_path: &Path,
+    webp_quality: u8,
 ) -> Result<(PathBuf, ImageResult)> {
     if !image_path.is_file() {
         bail!(
@@ -244,7 +245,7 @@ fn optimize_image(
     let webp_path = webp_path_for_image(image_path)?;
 
     if source_format != ImageFormat::WebP {
-        write_webp(&image, &webp_path)?;
+        write_webp(&image, &webp_path, webp_quality)?;
     } else if webp_path != image_path {
         fs::copy(image_path, &webp_path).with_context(|| {
             format!(
@@ -271,7 +272,7 @@ fn optimize_image(
         let variant_path =
             variant_path_for_width(image_path, width)?;
 
-        write_webp(&resized, &variant_path)?;
+        write_webp(&resized, &variant_path, webp_quality)?;
     }
 
     Ok((
@@ -407,7 +408,13 @@ fn decode_image(image_path: &Path) -> Result<(DynamicImage, ImageFormat)> {
     Ok((image, format))
 }
 
-fn write_webp(image: &DynamicImage, output_path: &Path) -> Result<()> {
+fn write_webp(
+    image: &DynamicImage,
+    output_path: &Path,
+    webp_quality: u8,
+) -> Result<()> {
+    let quality = f32::from(webp_quality);
+
     let encoded = match image {
         DynamicImage::ImageRgb8(rgb) => {
             webp::Encoder::from_rgb(
@@ -415,7 +422,7 @@ fn write_webp(image: &DynamicImage, output_path: &Path) -> Result<()> {
                 rgb.width(),
                 rgb.height(),
             )
-            .encode(WEBP_QUALITY)
+            .encode(quality)
         }
 
         DynamicImage::ImageRgba8(rgba) => {
@@ -424,7 +431,7 @@ fn write_webp(image: &DynamicImage, output_path: &Path) -> Result<()> {
                 rgba.width(),
                 rgba.height(),
             )
-            .encode(WEBP_QUALITY)
+            .encode(quality)
         }
 
         _ => {
@@ -435,7 +442,7 @@ fn write_webp(image: &DynamicImage, output_path: &Path) -> Result<()> {
                 rgba.width(),
                 rgba.height(),
             )
-            .encode(WEBP_QUALITY)
+            .encode(quality)
         }
     };
 

@@ -5,6 +5,6 @@ date_format = "%d.%m.%Y"
 code_theme = "ocean-dark"
 
 [optimizations]
-webp_quality = "90%"
+webp_quality = 90
 lazy_load_images = "yes"
 downscale_variants = "10%"

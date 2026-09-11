@@ -17,7 +17,7 @@ use axum::{
 };
 use tokio::net::TcpListener;
 
-use crate::{cli::PreviewArgs, commands::build};
+use crate::{cli::PreviewArgs};
 
 use crate::{
     config::{ResolvedSite},
@@ -38,8 +38,8 @@ pub async fn run(args: PreviewArgs) -> Result<()> {
         None        => site,
     };
 
-    eprintln!("Building site: {}", &args.site.display());
-    let report = build::build_site(&site)?;
+    //eprintln!("Building site: {}", &args.site.display());
+    //let report = build::build_site(&site)?;
     let watched_site = site.clone();
 
     //optimize::optimize(&site.output_dir);
@@ -53,7 +53,7 @@ pub async fn run(args: PreviewArgs) -> Result<()> {
     let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
 
     let state = AppState {
-        output_dir: report.output_dir.clone(),
+        output_dir: PathBuf::from(site.output_dir()),
     };
 
     let app = Router::new()
@@ -68,7 +68,7 @@ pub async fn run(args: PreviewArgs) -> Result<()> {
             format!("Failed to bind development server to http://{addr}")
         })?;
 
-    println!("Serving {}", report.output_dir.display());
+    println!("Serving {}", site.output_dir().display());
     println!("Open http://{addr}");
 
     axum::serve(listener, app)
