@@ -12,7 +12,6 @@ Return exactly one JSON object matching this shape:
     "assets": [
       {
         "filename": "string",
-        "path": "string",
         "kind": "image | svg | css_generated",
         "description": "string",
         "generation_prompt": "string",
@@ -277,7 +276,7 @@ page_html must:
 * use semantic HTML
 * contain all visible text directly in the rendered HTML
 * use the shared partial includes exactly as instructed
-* reference assets using their assets_manifest path
+* reference assets using their assets_manifest filename
 * use Hbox global layout classes where appropriate
 * use reusable visual component classes defined in design_css
 * use page-specific classes defined in page_css
@@ -471,7 +470,6 @@ It must have exactly this shape:
 "assets": [
 {
 "filename": "string",
-"path": "string",
 "kind": "image | svg | css_generated",
 "description": "string",
 "generation_prompt": "string",
@@ -486,25 +484,11 @@ Include every external asset referenced by page_html, header_html, footer_html, 
 Every manifest item must include:
 
 * filename
-* path
 * kind
 * description
 * generation_prompt
 * size
 * svg_code
-
-Use path exactly as:
-
-/images/<filename>
-
-Generated HTML and CSS must reference the path field exactly.
-
-Do not use:
-
-* /assets/
-* relative asset paths
-* filesystem paths
-* invented paths not present in assets_manifest
 
 Each asset must represent exactly one visual asset.
 
@@ -547,7 +531,6 @@ For SVG assets:
 * svg_code must contain complete, valid SVG XML
 * generation_prompt must still describe the intended asset
 * filename must end in .svg
-* path must be /images/<filename>
 * size must be "auto"
 
 Do not merely describe the SVG.
@@ -612,7 +595,6 @@ Before returning the JSON, verify all of the following:
 * global.css has not been recreated
 * CSS is not duplicated between design_css and page_css
 * every referenced external asset exists in assets_manifest
-* every assets_manifest path begins with /images/
 * every SVG manifest item contains valid SVG XML
 * every non-SVG manifest item has an empty svg_code
 * the result contains exactly the required JSON fields

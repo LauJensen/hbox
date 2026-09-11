@@ -1,4 +1,7 @@
-use crate::dev_print;
+use crate::{
+    assets::{safe_relative_path, validate_manifest},
+    dev_print,
+};
 
 use std::path::Path;
 use std::time::Duration;
@@ -629,7 +632,15 @@ impl ChatGptClient {
             bail!("asset {} has no generation prompt", asset.filename);
         }
 
-        let output_path = safe_asset_path(assets_dir, &asset.filename)?;
+        let relative_path = safe_relative_path(&asset.filename)
+            .with_context(|| {
+                format!(
+                    "invalid generated image filename '{}'",
+                    asset.filename
+                )
+            })?;
+
+        let output_path = assets_dir.join(relative_path);
 
         if let Some(parent) = output_path.parent() {
             tokio::fs::create_dir_all(parent)
@@ -889,6 +900,9 @@ fn validate_generated_files(files: &GeneratedSiteFiles, partial_status: &Partial
         files.footer_html.as_deref(),
     )?;
 
+    validate_manifest(&files.assets_manifest)
+        .context("OpenAI returned an invalid assets manifest")?;
+
     Ok(())
 }
 
@@ -935,7 +949,6 @@ fn generated_files_schema() -> Value {
                             "type": "object",
                             "properties": {
                                 "filename": { "type": "string" },
-                                "path": { "type": "string" },
                                 "kind": {
                                     "type": "string",
                                     "enum": [
@@ -948,18 +961,18 @@ fn generated_files_schema() -> Value {
                                 "generation_prompt": { "type": "string" },
                                 "svg_code": { "type": "string" },
                                 "size": {
-                                    "type": "string",
+                                    "type": ["string", "null"],
                                     "enum": [
                                         "1024x1024",
                                         "1024x1536",
                                         "1536x1024",
-                                        "auto"
+                                        "auto",
+                                        null
                                     ]
                                 }
                             },
                             "required": [
                                 "filename",
-                                "path",
                                 "kind",
                                 "description",
                                 "generation_prompt",
@@ -1009,16 +1022,6 @@ fn extract_image_assets(manifest: &AssetsManifest) -> Vec<AssetManifestItem> {
         .filter(|asset| matches!(&asset.kind, AssetKind::Image))
         .cloned()
         .collect()
-}
-
-fn safe_asset_path(assets_dir: &Path, filename: &str) -> Result<std::path::PathBuf> {
-    let path = Path::new(filename);
-
-    if path.is_absolute() || filename.contains("..") {
-        bail!("unsafe asset filename: {}", filename);
-    }
-
-    Ok(assets_dir.join(path))
 }
 
 fn is_retryable_status(status: StatusCode) -> bool {

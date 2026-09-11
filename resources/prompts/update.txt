@@ -13,9 +13,8 @@ page_html is itself rendered as a MiniJinja template. Any MiniJinja syntax shown
 Do not introduce {% extends %}, {% include %}, {% import %}, or {% from %} references unless the exact same template reference already exists in the supplied page.
 
 The assets manifest must contain only new or replaced assets required by this
-update. Do not repeat existing assets that remain unchanged. Every returned
-asset path must begin with /images/. Set svg_code only for SVG assets; use an
-empty string for other asset kinds.
+update. Do not repeat existing assets that remain unchanged. Set svg_code only
+for SVG assets; use an empty string for other asset kinds.
 
 The returned page_html is developer-maintained source code.
 
