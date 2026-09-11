@@ -12,10 +12,8 @@ use crate::ai::{
     AssetsManifest,
 };
 
-/// Generates all image and SVG assets into a clean staging directory.
-///
-/// Assets are staged by `filename`; their public `path` is used only when
-/// installing them into the site.
+/// Generates all currently supported file-backed assets in a clean staging
+/// directory.
 pub async fn generate_assets(
     client: &ChatGptClient,
     manifest: &AssetsManifest,
@@ -30,57 +28,71 @@ pub async fn generate_assets(
         .context("failed to generate image assets")?;
 
     for asset in &manifest.assets {
-        if let AssetKind::Svg = &asset.kind {
-            let relative = safe_relative_path(&asset.filename)?;
-            let destination = staging_dir.join(relative);
+        if asset.kind != AssetKind::Svg {
+            continue;
+        }
 
-            if let Some(parent) = destination.parent() {
-                tokio::fs::create_dir_all(parent)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "failed to create SVG staging directory {}",
-                            parent.display()
-                        )
-                    })?;
-            }
+        let relative = safe_relative_path(&asset.filename)?;
+        let destination = staging_dir.join(relative);
 
-            tokio::fs::write(&destination, asset.svg_code.trim())
+        if let Some(parent) = destination.parent() {
+            tokio::fs::create_dir_all(parent)
                 .await
                 .with_context(|| {
                     format!(
-                        "failed to write staged SVG {}",
-                        destination.display()
+                        "failed to create SVG staging directory {}",
+                        parent.display()
                     )
                 })?;
         }
+
+        tokio::fs::write(&destination, asset.svg_code.trim())
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to write staged SVG {}",
+                    destination.display()
+                )
+            })?;
     }
 
     Ok(())
 }
 
-/// Installs staged image and SVG assets at their manifest paths in `public/`.
-///
-/// `CssGenerated` entries do not correspond to files and are skipped.
+/// Installs every staged file-backed asset beneath the site's `public/`
+/// directory. CSS-generated entries do not represent files and are skipped.
 pub fn install_assets(
     site_dir: &Path,
     staging_dir: &Path,
     manifest: &AssetsManifest,
 ) -> Result<()> {
+    validate_manifest(manifest)
+        .context("refusing to install an invalid asset manifest")?;
+
     let mut installed_paths = HashSet::new();
 
     for asset in &manifest.assets {
-        if let AssetKind::CssGenerated = &asset.kind {
+        let Some(public_path) = asset.public_relative_path() else {
             continue;
-        }
+        };
 
-        let filename = safe_relative_path(&asset.filename)?;
-        let public_path = public_asset_path(&asset.path)?;
+        // Validate before using either derived path in a filesystem join: an
+        // absolute filename would otherwise replace the intended prefix.
+        let filename = safe_relative_path(&asset.filename)
+            .with_context(|| {
+                format!(
+                    "invalid asset filename '{}'",
+                    asset.filename
+                )
+            })?;
 
-        if !installed_paths.insert(public_path.to_path_buf()) {
+        if !installed_paths.insert(public_path.clone()) {
+            let public_url = asset
+                .public_url()
+                .context("file-backed asset has no public URL")?;
+
             bail!(
-                "multiple assets use the public path {}",
-                asset.path
+                "multiple assets resolve to public path {public_url}"
             );
         }
 
@@ -103,9 +115,154 @@ pub fn install_assets(
     Ok(())
 }
 
-/// Removes a staging directory or staging symlink if it exists.
-pub async fn remove_staging_dir(path: &Path) -> Result<()> {
-    remove_path_if_exists(path).await
+/// Returns every actionable problem in a manifest so callers can send all of
+/// them back to the model in a single repair request.
+pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut staged_filenames = HashSet::<PathBuf>::new();
+    let mut public_paths = HashSet::<PathBuf>::new();
+
+    for (index, asset) in manifest.assets.iter().enumerate() {
+        let label = format!(
+            "assets[{index}] ('{}')",
+            asset.filename
+        );
+
+        if asset.description.trim().is_empty() {
+            problems.push(format!(
+                "{label}: description must not be empty"
+            ));
+        }
+
+        match asset.kind {
+            AssetKind::Image => {
+                if asset.generation_prompt.trim().is_empty() {
+                    problems.push(format!(
+                        "{label}: image generation prompt must not be empty"
+                    ));
+                }
+
+                if !asset.svg_code.trim().is_empty() {
+                    problems.push(format!(
+                        "{label}: image assets must have empty svg_code"
+                    ));
+                }
+
+                if !has_extension(
+                    &asset.filename,
+                    &["png", "jpg", "jpeg", "webp"],
+                ) {
+                    problems.push(format!(
+                        "{label}: image filename must end in .png, .jpg, \
+                         .jpeg, or .webp"
+                    ));
+                }
+            }
+
+            AssetKind::Svg => {
+                if asset.generation_prompt.trim().is_empty() {
+                    problems.push(format!(
+                        "{label}: SVG generation prompt must not be empty"
+                    ));
+                }
+
+                if asset.svg_code.trim().is_empty() {
+                    problems.push(format!(
+                        "{label}: SVG source must not be empty"
+                    ));
+                }
+
+                if !has_extension(&asset.filename, &["svg"]) {
+                    problems.push(format!(
+                        "{label}: SVG filename must end in .svg"
+                    ));
+                }
+            }
+
+            AssetKind::CssGenerated => {
+                if asset.generation_prompt.trim().is_empty() {
+                    problems.push(format!(
+                        "{label}: CSS generation prompt must not be empty"
+                    ));
+                }
+
+                if !asset.svg_code.trim().is_empty() {
+                    problems.push(format!(
+                        "{label}: CSS-generated assets must have empty \
+                         svg_code"
+                    ));
+                }
+            }
+
+            AssetKind::Font => {
+                problems.push(format!(
+                    "{label}: font generation is not supported yet"
+                ));
+            }
+
+            AssetKind::Video => {
+                problems.push(format!(
+                    "{label}: video generation is not supported yet"
+                ));
+            }
+        }
+
+        let Some(public_path) = asset.public_relative_path() else {
+            continue;
+        };
+
+        let filename = match safe_relative_path(&asset.filename) {
+            Ok(filename) => filename,
+            Err(error) => {
+                problems.push(format!(
+                    "{label}: invalid filename: {error}"
+                ));
+                continue;
+            }
+        };
+
+        if !staged_filenames.insert(filename.to_path_buf()) {
+            problems.push(format!(
+                "{label}: duplicate staged filename '{}'",
+                asset.filename
+            ));
+        }
+
+        if !public_paths.insert(public_path) {
+            let public_url = asset
+                .public_url()
+                .unwrap_or_else(|| asset.filename.clone());
+
+            problems.push(format!(
+                "{label}: multiple assets resolve to public path \
+                 {public_url}"
+            ));
+        }
+    }
+
+    problems
+}
+
+/// Validates a manifest at filesystem boundaries.
+pub fn validate_manifest(manifest: &AssetsManifest) -> Result<()> {
+    let problems = manifest_problems(manifest);
+
+    if problems.is_empty() {
+        return Ok(());
+    }
+
+    bail!(
+        "invalid asset manifest:\n{}",
+        format_manifest_problems(&problems)
+    )
+}
+
+pub fn format_manifest_problems(problems: &[String]) -> String {
+    problems
+        .iter()
+        .map(|problem| format!("- {problem}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Validates a path that must remain relative to a known parent.
@@ -113,6 +270,11 @@ pub fn safe_relative_path(value: &str) -> Result<&Path> {
     let path = Path::new(value);
 
     if value.is_empty()
+        || value.trim() != value
+        || value.contains('\\')
+        || value.contains('\0')
+        || value.contains('?')
+        || value.contains('#')
         || path.is_absolute()
         || path
             .components()
@@ -124,87 +286,20 @@ pub fn safe_relative_path(value: &str) -> Result<&Path> {
     Ok(path)
 }
 
-/// Validates all file-producing entries before generation starts.
-fn validate_manifest(manifest: &AssetsManifest) -> Result<()> {
-    let mut filenames = HashSet::new();
-    let mut public_paths = HashSet::<PathBuf>::new();
-
-    for asset in &manifest.assets {
-        match &asset.kind {
-            AssetKind::CssGenerated => continue,
-
-            AssetKind::Image => {
-                if asset.generation_prompt.trim().is_empty() {
-                    bail!(
-                        "image asset '{}' has no generation prompt",
-                        asset.filename
-                    );
-                }
-            }
-
-            AssetKind::Svg => {
-                if asset.svg_code.trim().is_empty() {
-                    bail!(
-                        "SVG asset '{}' has no SVG source",
-                        asset.filename
-                    );
-                }
-            }
-        }
-
-        safe_relative_path(&asset.filename)
-            .with_context(|| {
-                format!(
-                    "invalid asset filename '{}'",
-                    asset.filename
-                )
-            })?;
-
-        let public_path = public_asset_path(&asset.path)
-            .with_context(|| {
-                format!(
-                    "invalid public asset path '{}'",
-                    asset.path
-                )
-            })?;
-
-        if !filenames.insert(asset.filename.as_str()) {
-            bail!(
-                "duplicate asset filename '{}'",
-                asset.filename
-            );
-        }
-
-        if !public_paths.insert(public_path.to_path_buf()) {
-            bail!(
-                "duplicate public asset path '{}'",
-                asset.path
-            );
-        }
-    }
-
-    Ok(())
+fn has_extension(filename: &str, allowed: &[&str]) -> bool {
+    Path::new(filename)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            allowed
+                .iter()
+                .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+        })
 }
 
-/// Converts `/images/foo.png` into the safe relative path `images/foo.png`.
-fn public_asset_path(value: &str) -> Result<&Path> {
-    let relative = value.trim_start_matches('/');
-    let path = safe_relative_path(relative)?;
-
-    let mut components = path.components();
-
-    let begins_with_images = match components.next() {
-        Some(Component::Normal(component)) => component == "images",
-        _ => false,
-    };
-
-    if !begins_with_images || components.next().is_none() {
-        bail!(
-            "public asset path must be beneath /images/: {value}"
-        );
-    }
-
-    Ok(path)
+/// Removes a staging directory or staging symlink if it exists.
+pub async fn remove_staging_dir(path: &Path) -> Result<()> {
+    remove_path_if_exists(path).await
 }
 
 /// Recreates the staging directory without following a staging symlink.

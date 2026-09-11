@@ -2,7 +2,7 @@ pub mod chatgpt;
 
 use std::{
     num::NonZeroUsize,
-    path::Path,
+    path::{PathBuf,Path},
 };
 
 use anyhow::{Context, Result};
@@ -65,7 +65,6 @@ pub struct AssetsManifest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetManifestItem {
     pub filename: String,
-    pub path: String,
     pub kind: AssetKind,
     pub description: String,
     pub generation_prompt: String,
@@ -74,12 +73,54 @@ pub struct AssetManifestItem {
     pub svg_code: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+impl AssetManifestItem {
+    pub fn public_relative_path(&self) -> Option<PathBuf> {
+        let directory = self.kind.public_directory()?;
+
+        Some(
+            Path::new(directory)
+                .join(&self.filename)
+        )
+    }
+
+    pub fn public_url(&self) -> Option<String> {
+        let directory = self.kind.public_directory()?;
+
+        Some(format!(
+            "/{directory}/{}",
+            self.filename
+        ))
+    }
+}
+
+
+impl AssetKind {
+    fn public_directory(self) -> Option<&'static str> {
+        match self {
+            Self::Image | Self::Svg => Some("images"),
+            Self::Font              => Some("fonts"),
+            Self::Video             => Some("videos"),
+            Self::CssGenerated      => None,
+        }
+    }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum AssetKind {
     Image,
     Svg,
-    CssGenerated
+    CssGenerated,
+    Font,
+    Video,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
