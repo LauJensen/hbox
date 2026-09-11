@@ -35,7 +35,7 @@ hbox itself requires no configuration, but to use LLM features, you should add t
 
 ``` bash
 export OPENAI_API_KEY=MYKEY
-export OPENAI_MODEL="gpt-5.6-terra"
+export OPENAI_MODEL="gpt-5.1"
 export OPENAI_IMAGE_MODEL="gpt-image-2"
 ```
 
@@ -67,17 +67,17 @@ It is a sharp tool for developers who want speed without giving up control.
 
 ### Validation
 
-hbox checks the following before deploy
+hbox can check the following before deploy
 
-- Are all images accessible?
-- Are all links valid?
-- Are all external links accessible? (run with --check-external-links)
-- Are all HTML files semantically correct?
-- Are all CSS files valid and accessible?
+- Do images have sources and alt attributes?
+- Do local links, images, resources and fragments exist?
+- Are HTML language attributes present?
+- Are resources referenced from CSS accessible?
+- Are external links accessible? (run with `--check-external-links`)
 
 ### Optimization
 
-hbox automatically minifies and optimizes your entire site. This includes converting all images to performant versions, suitable for all devices. In some cases this reduces download size by 90% without sacrificing quality.
+hbox automatically minifies your CSS during builds. Running `hbox optimize my-site` afterwards converts referenced local images to WebP, creates responsive variants and rewrites image tags with `srcset`. In some cases this reduces download size by 90% without sacrificing quality.
 
 ### Hot reloading
 
@@ -89,23 +89,24 @@ hbox preview my-site
 
 This opens `http://127.0.0.1:8080` and serves your site.
 
+If built output already exists, hbox serves it without rebuilding first, so an optimized output directory is preserved. If it does not exist, hbox offers to build it.
+
 Every change you make is compiled and served in real-time, making updates easy and safe.
 
 ### Previewing & Staging
 
-LLMs are inherently unpredictable. Both the `import` and `update` commands automatically do a full backup of your site before editing. When the LLM is done the result is stored in a new preview version, example
+LLMs are inherently unpredictable. Both the `import` and `update` commands leave your accepted site untouched and apply their changes to a complete preview copy. When the LLM is done the result is stored in a new preview version, example
 
 ``` bash
 > hbox update my-site about "Add a section for employees, add cards for Rick and Morty, with their phone numbers and email"
 ✓ Updated my-site, preview 1
-
 > hbox preview my-site 1
 ```
 
 If the changes look good, commit them using
 
 ``` bash
-hbox accept my-site 1
+> hbox accept my-site 1
 ```
 
 
@@ -117,19 +118,16 @@ Hbox is close to version 1.0 and is currently hosting several high traffic sites
 This workflow is currently fully supported
 
 ```bash
-> hbox init my-site
-✓ my-site initialized
-> hbox import my-site screenshot.png about
-✓ my-site preview 1 generated
-> hbox preview my-site 1   (hot reloading while you browse)
-✓ serving preview on 127.0.0.1:8080
-> hbox update my-site about "Use a green color-scheme instead"
-✓ my-site preview 2 generated
-> hbox accept my-site 2
-✓ my-site replaced by my-site-preview-2
-> hbox build my-site
-✓ my-site built
-> rsync my-site
+hbox init my-site
+hbox import my-site screenshot.png about
+hbox preview my-site 1   # Inspect, then stop with Ctrl+C
+hbox accept my-site 1
+hbox update my-site about "Use a green color-scheme instead"
+hbox preview my-site 1   # Inspect, then stop with Ctrl+C
+hbox accept my-site 1
+hbox build my-site
+hbox optimize my-site
+rsync -az --delete dist/my-site/ deploy@example.com:/srv/hbox/my-site/
 ```
 
 The architecture is intentionally simple and may still change while the project matures.
@@ -172,7 +170,7 @@ sites/my-site/
 Regular website pages live in `pages/` as normal HTML files:
 
 ```text
-pages/index.html   -> /en/
+pages/index.html   -> /
 pages/about.html   -> /en/about/
 pages/contact.html -> /en/contact/
 ```
@@ -260,6 +258,8 @@ description: "Learn how to make a flocking simulation using Quadtrees and Clojur
 date:        "2025-12-15"
 image:       "/blogposts/flocking_quadtrees.png"
 template:    "templates/blogpost.html"
+draft:       false
+code_theme:  "ocean-dark"
 externals:
   - https://cdn.jsdelivr.net/gh/LauJensen/practical-quadtree@master/public/js/main.js
 ---
@@ -300,7 +300,7 @@ All commands operate in `./sites/` and `./dist/`.
 
 The `sites` folder contains your source-files for each site. These are human-readable unoptimized html, css and md files.
 
-The `dist`folder contains the sites which you deploy to your webserver, they are highly optimized and not necessarily readable by humans.
+The `dist` folder contains the generated sites which you deploy to your webserver. CSS is minified during builds, while image optimization is performed separately by `hbox optimize`.
 
 ### `hbox init`
 
@@ -326,27 +326,28 @@ Import a screenshot or mockup and turn it into a static HTML page.
 hbox import lbjgruppen.com screenshot.png about
 ```
 
-This generates:
+The third argument is the required page slug.
+
+This generates a numbered preview, for example:
 
 ```text
-sites/lbjgruppen.com/pages/about.html
-sites/lbjgruppen.com/public/images/...
+sites/.preview-lbjgruppen.com-1/pages/about.html
+sites/.preview-lbjgruppen.com-1/public/images/...
+dist/.preview-lbjgruppen.com-1/...
 ```
 
 If shared partials are missing, Hbox can generate:
 
 ```text
-sites/my-site/partials/header.html
-sites/my-site/partials/footer.html
+sites/.preview-my-site-1/partials/header.html
+sites/.preview-my-site-1/partials/footer.html
 ```
 
 If the partials already exist, the generated page reuses them instead of recreating site chrome.
 
 ---
 
-TBD
-
-Hbox does not try to hide the result behind a page builder abstraction. After import, you can open the files and edit them directly.
+Hbox does not try to hide the result behind a page builder abstraction. After import, you can open the preview files and edit them directly, or accept the preview to make them the site's source files.
 
 ## Current MVP scope
 
@@ -397,16 +398,37 @@ domains = ["foo.com", "www.foo.com"]
 access_log = true
 ```
 
-If domains are set, `my-site/nginx.conf` will be emitted on build and the nginx.conf knows to look for it.
+If domains are set, `dist/my-site/nginx.conf` will be emitted on build and the main nginx.conf knows to look for it.
 
-Once `/etx/nginx/nginx.conf` and potentially `/etc/nginx/sites-enabled/00-default.conf` you can simply rsync hbox sites into `/src/hbox`. After the very first upload, you must manually run `systemctl reload nginx`.
+Once `/etc/nginx/nginx.conf` and potentially `/etc/nginx/sites-enabled/00_default.conf` are installed, you can rsync built hbox sites from `dist/` into `/srv/hbox`. After the very first upload, you must manually run `systemctl reload nginx`.
 
 For easy deployment, you can use these permissions, where <deploy> is whichever user account you ssh into.
 
 ``` bash
-mkdir -p /srv/hbox
-chown deploy:deploy /srv/hbox
-chmod 755 /srv/hbox
+sudo install -d -o deploy -g deploy -m 755 /srv/hbox
+```
+
+The deploy account can then upload a built site without root access:
+
+``` bash
+rsync -az --delete dist/my-site/ deploy@example.com:/srv/hbox/my-site/
+```
+
+You can take a shortcut and achieve the same, by adding this to your sites `hbox.toml`:
+
+``` toml
+[deployment]
+ssh_user = "deploy"
+ssh_host = "example.com"
+deploy_path = "/srv/hbox"
+```
+
+Notice the `deploy_path` is ready to host multiple sites and will install yours in `/srv/hbox/your-site`.
+
+To deploy, simply run
+
+``` bash
+hbox deploy my-site
 ```
 
 ## License
