@@ -4,13 +4,13 @@
 
 [![Screenshot of Hbox](docs/images/readme_screenshot.png)](docs/images/readme_screenshot.png)
 
-On its own, `hbox` is a static site builder which lets you create, extend and deploy websites very quickly.
+On its own, `hbox` is a static site builder which lets you create, maintain and deploy websites very quickly.
 
 Blogging is a first class citizen, which supports converting pure markdown into blogposts.
 
-On top of that, you can import a screenshot (possibly ai generated) of a website and import this directly as a page into an existing `hbox` site, or as the starting point for a brand new site.
+On top of that, you can import a screenshot (possibly ai generated) of a website and import this directly as a page into an existing `hbox` site, or as the starting point for a brand new site. The screenshot is converted into developer-friendly semantic HTML and CSS.
 
-Example
+Example workflow:
 
 ``` text
 * Jam with ChatGPT about website designs     (10 minutes)
@@ -19,30 +19,96 @@ Example
 * Deploy to webserver                        (10 secs)
 ```
 
----
+## Installation
+
+hbox is offered as a single stand-alone executable for all platforms. Download it from our [releases page](https://github.com/LauJensen/hbox/releases).
+
+If you have rust installed, simply run
+
+``` bash
+cargo install --git https://github.com/LauJensen/hbox --locked
+```
+
+## Configuration
+
+hbox itself requires no configuration, but to use LLM features, you should add the following to your environment
+
+``` bash
+export OPENAI_API_KEY=MYKEY
+export OPENAI_MODEL="gpt-5.6-terra"
+export OPENAI_IMAGE_MODEL="gpt-image-2"
+```
+
+Pick whichever model you feel is the best balance between speed, price and quality.
 
 ## Why hbox?
 
-Modern AI tools can generate impressive visual website concepts quickly, but getting from a mockup to a clean, editable, deployable site is still awkward.
+Modern AI tools can generate impressive visual website concepts quickly, but getting from a mockup to a clean, editable, deployable site is still awkward and maintaining, blogging and otherwise working with the site requires constant LLM use.
 
 `hbox` exists to close that gap.
 
 It lets you:
 
-* scaffold a simple static site
-* import a screenshot or mockup as a real HTML page
-* generate image assets with AI
-* edit pages locally
-* write blog posts in Markdown
-* build a deployable static site
-* keep full ownership of the resulting code
-* add repeatable/dynamic components via MiniJinja
+* Scaffold a simple static site
+* Import a screenshot or mockup as a real HTML page
+* Generate image assets with AI automatically
+* Edit pages locally
+* Write blog posts in Markdown
+* Build a deployable static site
+* Keep full ownership of the resulting code
+* Add repeatable/dynamic components via MiniJinja
+* Validate everything before deploying
 
 `hbox` is not trying to be Webflow, Squarespace, or a full CMS - it's much simpler and it's yours.
 
 It is a sharp tool for developers who want speed without giving up control.
 
----
+## Features
+
+### Validation
+
+hbox checks the following before deploy
+
+- Are all images accessible?
+- Are all links valid?
+- Are all external links accessible? (run with --check-external-links)
+- Are all HTML files semantically correct?
+- Are all CSS files valid and accessible?
+
+### Optimization
+
+hbox automatically minifies and optimizes your entire site. This includes converting all images to performant versions, suitable for all devices. In some cases this reduces download size by 90% without sacrificing quality.
+
+### Hot reloading
+
+While working on your site, run
+
+``` bash
+hbox preview my-site
+```
+
+This opens `http://127.0.0.1:8080` and serves your site.
+
+Every change you make is compiled and served in real-time, making updates easy and safe.
+
+### Previewing & Staging
+
+LLMs are inherently unpredictable. Both the `import` and `update` commands automatically do a full backup of your site before editing. When the LLM is done the result is stored in a new preview version, example
+
+``` bash
+> hbox update my-site about "Add a section for employees, add cards for Rick and Morty, with their phone numbers and email"
+✓ Updated my-site, preview 1
+
+> hbox preview my-site 1
+```
+
+If the changes look good, commit them using
+
+``` bash
+hbox accept my-site 1
+```
+
+
 
 ## Project status
 
@@ -51,12 +117,19 @@ Hbox is close to version 1.0 and is currently hosting several high traffic sites
 This workflow is currently fully supported
 
 ```bash
-hbox init my-site
-hbox import my-site screenshot.png about
-hbox preview my-site 1   (hot reloading while you browse)
-hbox accept my-site 1
-hbox build my-site
-rsync my-site
+> hbox init my-site
+✓ my-site initialized
+> hbox import my-site screenshot.png about
+✓ my-site preview 1 generated
+> hbox preview my-site 1   (hot reloading while you browse)
+✓ serving preview on 127.0.0.1:8080
+> hbox update my-site about "Use a green color-scheme instead"
+✓ my-site preview 2 generated
+> hbox accept my-site 2
+✓ my-site replaced by my-site-preview-2
+> hbox build my-site
+✓ my-site built
+> rsync my-site
 ```
 
 The architecture is intentionally simple and may still change while the project matures.
@@ -128,6 +201,24 @@ Pages can include them using MiniJinja:
 
 {% include "partials/footer.html" %}
 ```
+
+They can even use Markdown
+
+```html
+{% include "partials/header.html" %}
+{% include "partials/menu.html" %}
+
+<main>
+    {% filter markdown %}
+    # About us
+
+    This page is rendered as ordinary HTML.
+    {% endfilter %}
+</main>
+
+{% include "partials/footer.html" %}
+```
+
 
 ### Templates are for generated content types
 
@@ -201,17 +292,11 @@ These classes handle structure only. Fonts, colors, borders, shadows, and other 
 
 ---
 
-## Installation
-
-TBD
-
----
-
 ## Commands
 
 ### General
 
-All commands work in `./sites/` and `./dist/`.
+All commands operate in `./sites/` and `./dist/`.
 
 The `sites` folder contains your source-files for each site. These are human-readable unoptimized html, css and md files.
 
@@ -263,58 +348,6 @@ TBD
 
 Hbox does not try to hide the result behind a page builder abstraction. After import, you can open the files and edit them directly.
 
----
-
-## Design principles
-
-### 1. Own the code
-
-Generated output should be real files developers can inspect, edit, commit, and deploy.
-
-### 2. Keep pages simple
-
-Pages are HTML files in `pages/`.
-
-No page JSON.
-No hidden CMS records.
-No unnecessary abstraction.
-
-### 3. Use MiniJinja only where it earns its keep
-
-MiniJinja is useful for:
-
-* shared partials
-* blog templates
-* navigation/menu reuse
-* loops and generated listings
-
-It is not required for ordinary one-off page text.
-
-### 4. Make AI useful, not magical
-
-AI should accelerate the first draft and snappy updates, not trap the developer in generated complexity.
-
-### 5. Optimize for the first five minutes
-
-The primary experience should be:
-
-```text
-I have a screenshot.
-I run one command.
-I get a real page.
-I can edit it.
-I can build it.
-I can put it online.
-```
-
----
-
-## Example workflow
-
-TBD
-
----
-
 ## Current MVP scope
 
 In scope for v1:
@@ -338,15 +371,47 @@ Out of scope for v1:
 * multi-user editing
 * complex content schemas
 * generalized component system
+* built-in hosting & publishing
 
 These may be explored later, but the first version is intentionally small.
 
 ---
 
+## Hosting
+
+While a plan exists for some very, very excellent built-in hosting currently your best bet is nginx.
+
+On Arch linux, install NGINX and ACME/LetsEncrypt:
+
+``` bash
+sudo pacman -S nginx nginx-mod-acme
+```
+
+For a maximum throughput configuration, have a look in `resources/nginx/nginx.conf`. Make sure to replace <YOUR EMAIL> with the actual email you want sent to LetsEncrypt for SSL cert generation.
+
+Each hbox site that you want to host, needs the following in its hbox.toml
+
+``` toml
+[nginx]
+domains = ["foo.com", "www.foo.com"]
+access_log = true
+```
+
+If domains are set, `my-site/nginx.conf` will be emitted on build and the nginx.conf knows to look for it.
+
+Once `/etx/nginx/nginx.conf` and potentially `/etc/nginx/sites-enabled/00-default.conf` you can simply rsync hbox sites into `/src/hbox`. After the very first upload, you must manually run `systemctl reload nginx`.
+
+For easy deployment, you can use these permissions, where <deploy> is whichever user account you ssh into.
+
+``` bash
+mkdir -p /srv/hbox
+chown deploy:deploy /srv/hbox
+chmod 755 /srv/hbox
+```
 
 ## License
 
-TBD.
+Hbox is licensed under the [MIT License](LICENSE).
 
 ## Credits
 
