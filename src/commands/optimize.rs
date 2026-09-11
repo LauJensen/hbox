@@ -11,17 +11,26 @@ use std::path::Path;
 use crate::optimization::images;
 
 pub fn optimize(dist_dir: &Path) -> Result<()> {
-    println!("Optimizing {:?}", &dist_dir);
+    println!("Optimizing {:?}", dist_dir);
 
-    let html_files = images::find_dist_html_files(&dist_dir)?;
+    let html_files =
+        images::find_dist_html_files(dist_dir)?;
 
-    for file in html_files {
-        images::optimize_html_file(&dist_dir,
-                                   &file)?;
+    let results_by_path =
+        images::build_results_by_path(
+            dist_dir,
+            &html_files,
+        )?;
+
+    for html_file in &html_files {
+        images::optimize_html_file(
+            dist_dir,
+            html_file,
+            &results_by_path,
+        )?;
     }
 
     Ok(())
-
 }
 
 pub async fn run(args: OptimizeArgs) -> Result<()> {

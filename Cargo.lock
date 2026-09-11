@@ -1262,6 +1262,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "pulldown-cmark",
+ "rayon",
  "regex",
  "reqwest",
  "schemars",

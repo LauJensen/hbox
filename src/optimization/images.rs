@@ -2,6 +2,7 @@ use crate::dev_print;
 use reqwest::Url;
 
 use std::{
+    collections::{BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
 };
@@ -14,9 +15,18 @@ use image::{
     ImageFormat,
 };
 use kuchiki::traits::*;
+use rayon::prelude::*;
 use walkdir::WalkDir;
 
 const WEBP_QUALITY: f32 = 82.0;
+
+#[derive(Debug, Clone)]
+pub struct ImageResult {
+    original_width: u32,
+    variant_widths: Vec<u32>,
+}
+
+pub type ResultsByPath = HashMap<PathBuf, ImageResult>;
 
 pub fn find_dist_html_files(path: &Path) -> Result<Vec<PathBuf>> {
     if !path.is_dir() {
@@ -47,9 +57,27 @@ pub fn find_dist_html_files(path: &Path) -> Result<Vec<PathBuf>> {
     Ok(html_files)
 }
 
+/// Finds every unique local image referenced by the supplied HTML files and
+/// optimizes those images in parallel.
+pub fn build_results_by_path(
+    dist_site_dir: &Path,
+    html_paths: &[PathBuf],
+) -> Result<ResultsByPath> {
+    let jobs = collect_image_jobs(dist_site_dir, html_paths)?;
+
+    let results = jobs
+        .par_iter()
+        .map(|image_path| optimize_image(image_path))
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(results.into_iter().collect())
+}
+
+/// Rewrites one HTML file using image artifacts that have already been built.
 pub fn optimize_html_file(
     dist_site_dir: &Path,
     html_path: &Path,
+    results_by_path: &ResultsByPath,
 ) -> Result<()> {
     dev_print!("Optimizing {}", html_path.display());
 
@@ -62,7 +90,13 @@ pub fn optimize_html_file(
 
     let document = kuchiki::parse_html().one(html);
 
-    optimize_img_tags(dist_site_dir, html_path, &document).with_context(|| {
+    rewrite_img_tags(
+        dist_site_dir,
+        html_path,
+        &document,
+        results_by_path,
+    )
+    .with_context(|| {
         format!(
             "Failed to optimize image tags in: {}",
             html_path.display()
@@ -88,48 +122,168 @@ pub fn optimize_html_file(
     Ok(())
 }
 
-fn optimize_img_tags(
+fn collect_image_jobs(
+    dist_site_dir: &Path,
+    html_paths: &[PathBuf],
+) -> Result<Vec<PathBuf>> {
+    let mut image_paths = BTreeSet::new();
+
+    for html_path in html_paths {
+        let html = fs::read_to_string(html_path).with_context(|| {
+            format!(
+                "Failed to read HTML file: {}",
+                html_path.display()
+            )
+        })?;
+
+        let document = kuchiki::parse_html().one(html);
+        let img_tags = document
+            .select("img")
+            .map_err(|_| anyhow::anyhow!("Failed to select img tags"))?;
+
+        for img in img_tags {
+            let element = img
+                .as_node()
+                .as_element()
+                .context("img selector returned a non-element node")?;
+
+            let src = {
+                let attrs = element.attributes.borrow();
+
+                if attrs
+                    .get("srcset")
+                    .is_some_and(|srcset| !srcset.trim().is_empty())
+                {
+                    continue;
+                }
+
+                attrs.get("src").map(str::to_owned)
+            };
+
+            let Some(src) = src else {
+                continue;
+            };
+
+            let Some(image_path) = image_path_for_src(
+                dist_site_dir,
+                html_path,
+                &src,
+            )? else {
+                continue;
+            };
+
+            if is_optimizable_image(&image_path) {
+                image_paths.insert(image_path);
+            }
+        }
+    }
+
+    Ok(image_paths.into_iter().collect())
+}
+
+fn optimize_image(
+    image_path: &Path,
+) -> Result<(PathBuf, ImageResult)> {
+    if !image_path.is_file() {
+        bail!(
+            "Referenced image does not exist on disk: {}",
+            image_path.display()
+        );
+    }
+
+    let (image, source_format) = decode_image(image_path)?;
+    let (original_width, original_height) = image.dimensions();
+    let variant_widths = responsive_widths(original_width);
+    let webp_path = webp_path_for_image(image_path)?;
+
+    if source_format != ImageFormat::WebP {
+        write_webp(&image, &webp_path)?;
+    } else if webp_path != image_path {
+        fs::copy(image_path, &webp_path).with_context(|| {
+            format!(
+                "Failed to copy WebP image {} to {}",
+                image_path.display(),
+                webp_path.display()
+            )
+        })?;
+    }
+
+    for &width in &variant_widths {
+        let height = scaled_height(
+            original_width,
+            original_height,
+            width,
+        );
+
+        let resized = image.resize_exact(
+            width,
+            height,
+            FilterType::Lanczos3,
+        );
+
+        let variant_path =
+            variant_path_for_width(image_path, width)?;
+
+        write_webp(&resized, &variant_path)?;
+    }
+
+    Ok((
+        image_path.to_path_buf(),
+        ImageResult {
+            original_width,
+            variant_widths,
+        },
+    ))
+}
+
+fn rewrite_img_tags(
     dist_site_dir: &Path,
     html_path: &Path,
     document: &kuchiki::NodeRef,
+    results_by_path: &ResultsByPath,
 ) -> Result<()> {
     let img_tags = document
         .select("img")
         .map_err(|_| anyhow::anyhow!("Failed to select img tags"))?;
 
     for img in img_tags {
-        optimize_img_tag(dist_site_dir, html_path, img.as_node())?;
+        rewrite_img_tag(
+            dist_site_dir,
+            html_path,
+            img.as_node(),
+            results_by_path,
+        )?;
     }
 
     Ok(())
 }
 
-fn optimize_img_tag(
+fn rewrite_img_tag(
     dist_site_dir: &Path,
     html_path: &Path,
     img: &kuchiki::NodeRef,
+    results_by_path: &ResultsByPath,
 ) -> Result<()> {
     let element = img
         .as_element()
         .context("img selector returned a non-element node")?;
 
-    let (src, existing_srcset) = {
+    let src = {
         let attrs = element.attributes.borrow();
+
+        if attrs
+            .get("srcset")
+            .is_some_and(|srcset| !srcset.trim().is_empty())
+        {
+            return Ok(());
+        }
 
         let Some(src) = attrs.get("src") else {
             return Ok(());
         };
 
-        let existing_srcset = attrs
-            .get("srcset")
-            .map(|value| value.trim().to_owned());
-
-        (src.to_owned(), existing_srcset)
+        src.to_owned()
     };
-
-    if existing_srcset.is_some_and(|srcset| !srcset.is_empty()) {
-        return Ok(());
-    }
 
     let Some(image_path) = image_path_for_src(
         dist_site_dir,
@@ -143,57 +297,19 @@ fn optimize_img_tag(
         return Ok(());
     }
 
-    if !image_path.is_file() {
-        bail!(
-            "Image referenced by {} does not exist on disk: {} -> {}",
-            html_path.display(),
-            src,
+    let result = results_by_path.get(&image_path).with_context(|| {
+        format!(
+            "Missing optimization result for {}",
             image_path.display()
-        );
-    }
+        )
+    })?;
 
-    let (image, source_format) = decode_image(&image_path)?;
-
-    let (original_width, original_height) = image.dimensions();
-    let webp_path = webp_path_for_image(&image_path)?;
     let webp_src = webp_src_for_image(&src)?;
-
-    if source_format != ImageFormat::WebP {
-        write_webp(&image, &webp_path)?;
-    } else if webp_path != image_path && !webp_path.is_file() {
-        fs::copy(&image_path, &webp_path).with_context(|| {
-            format!(
-                "Failed to copy WebP image {} to {}",
-                image_path.display(),
-                webp_path.display()
-            )
-        })?;
-    }
-
     let mut srcset_entries = vec![
-        format!("{webp_src} {original_width}w")
+        format!("{webp_src} {}w", result.original_width)
     ];
 
-    for width in responsive_widths(original_width) {
-        let height = scaled_height(
-            original_width,
-            original_height,
-            width,
-        );
-
-        let variant_path =
-            variant_path_for_width(&image_path, width)?;
-
-        if !variant_path.is_file() {
-            let resized = image.resize_exact(
-                width,
-                height,
-                FilterType::Lanczos3,
-            );
-
-            write_webp(&resized, &variant_path)?;
-        }
-
+    for &width in &result.variant_widths {
         let variant_src = variant_src_for_width(&src, width)?;
         srcset_entries.push(format!("{variant_src} {width}w"));
     }
@@ -245,15 +361,36 @@ fn decode_image(image_path: &Path) -> Result<(DynamicImage, ImageFormat)> {
 }
 
 fn write_webp(image: &DynamicImage, output_path: &Path) -> Result<()> {
-    let rgba = image.to_rgba8();
+    let encoded = match image {
+        DynamicImage::ImageRgb8(rgb) => {
+            webp::Encoder::from_rgb(
+                rgb.as_raw(),
+                rgb.width(),
+                rgb.height(),
+            )
+            .encode(WEBP_QUALITY)
+        }
 
-    let encoder = webp::Encoder::from_rgba(
-        rgba.as_raw(),
-        rgba.width(),
-        rgba.height(),
-    );
+        DynamicImage::ImageRgba8(rgba) => {
+            webp::Encoder::from_rgba(
+                rgba.as_raw(),
+                rgba.width(),
+                rgba.height(),
+            )
+            .encode(WEBP_QUALITY)
+        }
 
-    let encoded = encoder.encode(WEBP_QUALITY);
+        _ => {
+            let rgba = image.to_rgba8();
+
+            webp::Encoder::from_rgba(
+                rgba.as_raw(),
+                rgba.width(),
+                rgba.height(),
+            )
+            .encode(WEBP_QUALITY)
+        }
+    };
 
     fs::write(output_path, &*encoded).with_context(|| {
         format!(
