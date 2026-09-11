@@ -119,11 +119,18 @@ pub async fn run(cli: cli::Cli) -> Result<CommandOutcome> {
             commands::preview::run(args).await?;
         }
 
+        cli::Command::Deploy(args) => {
+            commands::deploy::run(args).await?;
+        }
+
         cli::Command::Validate(args) => {
             let report = commands::validate::run(args).await?;
 
             return Ok(CommandOutcome::Validation(report));
         }
+
+
+
     }
 
     Ok(CommandOutcome::Success)

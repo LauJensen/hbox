@@ -6,3 +6,4 @@ pub mod optimize;
 pub mod validate;
 pub mod update;
 pub mod accept;
+pub mod deploy;

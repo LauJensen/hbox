@@ -23,6 +23,16 @@ pub struct SiteConfig {
 
     #[serde(default)]
     pub optimizations: OptimizationConfig,
+
+    #[serde(default)]
+    pub deployment: Option<DeployConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeployConfig {
+    pub ssh_user: String,
+    pub ssh_host: String,
+    pub deploy_path: String,
 }
 
 

@@ -43,6 +43,8 @@ pub enum Command {
     /// Serve site on localhost with hot-reloads/rebuilds
     Preview(PreviewArgs),
 
+    Deploy(DeployArgs),
+
 }
 
 #[derive(Debug, Args)]
@@ -80,6 +82,13 @@ pub struct AcceptPreviewArgs {
     /// Preview number to accept
     #[arg(index=2)]
     pub preview_num: NonZeroU32,
+}
+
+#[derive(Debug, Args)]
+pub struct DeployArgs {
+   #[arg(index=1)]
+    /// Site to publish
+    pub site_name: PathBuf,
 }
 
 #[derive(Debug, Args)]
