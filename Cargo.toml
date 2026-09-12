@@ -1,14 +1,15 @@
 [package]
-name        = "hbox"
-version     = "0.9.0"
-edition     = "2024"
-license     = "MIT"
-repository  = "https://github.com/LauJensen/hbox"
-readme      = "README.md"
-description = "A static site builder optimized for AI-generated source files"
-homepage    = "https://github.com/LauJensen/hbox"
-keywords    = ["static-site-generator", "ai", "html", "markdown"]
-categories  = ["command-line-utilities", "web-programming"]
+name         = "hbox"
+rust-version = "1.88"
+version      = "0.9.0"
+edition      = "2024"
+license      = "MIT"
+readme       = "README.md"
+homepage     = "https://www.gethbox.com"
+keywords     = ["site-generator", "ai", "html", "markdown"]
+categories   = ["command-line-utilities", "web-programming"]
+repository   = "https://github.com/LauJensen/hbox"
+description  = "A static site builder optimized for AI-generated source files"
 
 [dev-dependencies]
 tempfile    = "3"
@@ -29,7 +30,7 @@ axum = "0.8"
 notify = "8"
 base64 = "0.22"
 mime_guess = "2"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 indicatif = "0.18.4"
 futures = "0.3.32"
 notify-debouncer-full = "0.7"
@@ -37,7 +38,7 @@ lightningcss = "1.0.0-alpha.71"
 regex = "1"
 html-escape = "0.2"
 syntect = "5"
-image = { version = "0.25", features = ["jpeg", "png", "webp"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"]}
 webp = "0.3"
 minify-html = "0.15"
 kuchiki = "0.8"
