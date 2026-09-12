@@ -70,7 +70,6 @@ For each section:
 
 If a visible section heading appears but its detailed content is not visible in the screenshot,
 include a small set of plausible items in the section.items array based on the page context.
-Mark such items as inferred.
 Do not leave important business sections empty.
 
 For assets:
