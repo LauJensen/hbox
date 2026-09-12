@@ -89,7 +89,7 @@ hbox preview my-site
 
 This opens `http://127.0.0.1:8080` and serves your site.
 
-If built output already exists, hbox serves it without rebuilding first, so an optimized output directory is preserved. If it does not exist, hbox offers to build it.
+If built output already exists, hbox serves it without rebuilding first, so an optimized output directory is preserved. If it does not exist, hbox builds it automatically.
 
 Every change you make is compiled and served in real-time, making updates easy and safe.
 
@@ -230,13 +230,22 @@ templates/blogpost-video.html
 A minimal blog post template might be:
 
 ```html
-{% include "partials/header.html" %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>My awesome site</title>
+  </head>
+  <body>
+    {% include "partials/header.html" %}
 
-<main class="blogpost">
-  {{ content }}
-</main>
+    <div class="blogpost-content">
+      {{ content }}
+    </div>
 
-{% include "partials/footer.html" %}
+    {% include "partials/footer.html" %}
+  </body>
+</html>
 ```
 
 ### Blog posts are Markdown
