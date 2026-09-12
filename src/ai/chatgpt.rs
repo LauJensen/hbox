@@ -1,6 +1,5 @@
 use crate::{
     assets::{safe_relative_path, validate_manifest},
-    dev_print,
 };
 
 use std::path::Path;

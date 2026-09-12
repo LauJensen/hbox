@@ -16,7 +16,6 @@ use crate::utils::resolve_within;
 
 use crate::config::ResolvedSite;
 
-#[derive(Debug)]
 pub struct ValidationReport {
     pub errors: usize,
     pub pages_inspected: usize,
@@ -127,11 +126,12 @@ pub async fn validate_site(
         .map(|report| report.issues.len())
         .sum();
 
-    print_report(&dist_dir, &reports, errors, html_files.len());
+    let pages_inspected = html_files.len();
+    print_report(&dist_dir, &reports, errors, pages_inspected);
 
     Ok(ValidationReport {
         errors,
-        pages_inspected: html_files.len(),
+        pages_inspected,
     })
 }
 

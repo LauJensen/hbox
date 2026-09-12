@@ -45,6 +45,7 @@ pub struct BuildReport {
     pub output_dir: PathBuf,
     pub pages_built: usize,
     pub blogposts_built: usize,
+    pub elapsed_msecs: f64,
 }
 
 pub async fn run(args: BuildArgs) -> Result<()> {
@@ -52,10 +53,11 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     let report = build_site(&site)?;
 
     println!(
-        "Built {} pages and {} blogposts into {}",
+        "Built {} pages and {} blogposts into {} in {:.2} msecs",
         report.pages_built,
         report.blogposts_built,
         report.output_dir.display(),
+        report.elapsed_msecs,
     );
 
     Ok(())
@@ -116,12 +118,13 @@ pub fn build_site(site: &ResolvedSite) -> Result<BuildReport> {
 
     publish::commit(site)?;
 
-    eprintln!("Site built in: {:?}", start_time.elapsed());
+    let elapsed_msecs = start_time.elapsed().as_secs_f64() * 1_000.0;
 
     Ok(BuildReport {
         output_dir: site.output_dir().to_path_buf(),
         pages_built,
         blogposts_built,
+        elapsed_msecs,
     })
 }
 
@@ -370,7 +373,7 @@ fn render_document(
     fs::write(&output_file, rendered)
         .with_context(|| format!("Failed to write file: {}", output_file.display()))?;
 
-    println!("Wrote blog post: {}", output_file.display());
+    print_output_path(output_dir, &output_file);
 
     Ok(())
 }
@@ -584,7 +587,7 @@ fn render_html_pages(
         let css_source = source.with_extension("css");
 
         let final_html = if css_source.is_file() {
-            println!("Page {} has custom CSS", source.display());
+            //println!("Page {} has custom CSS", source.display());
             // fs::read_to_string(&css_source).with_context(|| {
             let page_css = minify_stylesheet_source(&css_source)?;
 
@@ -606,6 +609,8 @@ fn render_html_pages(
 
         fs::write(&target, final_html)
             .with_context(|| format!("Failed to write page {}", target.display()))?;
+
+        print_output_path(output_dir, &target);
 
         pages_built += 1;
     }
@@ -1055,4 +1060,9 @@ fn document_template_context(
         externals      => document.meta.externals.clone(),
         template       => document.template.clone(),
     }
+}
+
+fn print_output_path(output_dir: &Path, path: &Path) {
+    let relative = path.strip_prefix(output_dir).unwrap_or(path);
+    println!("✓ {}", relative.display());
 }
