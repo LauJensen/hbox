@@ -46,7 +46,6 @@ pub struct PostMeta {
     pub url: String,
     pub externals: Vec<String>,
 
-    #[serde(serialize_with = "serialize_optional_date")]
     pub date: Option<NaiveDate>,
 
     pub featured_image: Option<String>,
@@ -86,18 +85,5 @@ impl Document {
 impl From<&Document> for PostSummary {
     fn from(doc: &Document) -> Self {
         doc.meta.clone()
-    }
-}
-
-fn serialize_optional_date<S>(
-    date: &Option<NaiveDate>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match date {
-        Some(date) => serializer.serialize_some(&date.format("%d-%m-%Y").to_string()),
-        None => serializer.serialize_none(),
     }
 }

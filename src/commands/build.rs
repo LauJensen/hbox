@@ -324,10 +324,15 @@ fn render_document(
         )
     })?;
 
+    let page = document_template_context(
+        document,
+        &config.site.date_format,
+    );
+
     let rendered = template
         .render(context! {
             site        => config.site,
-            page        => document,
+            page        => page,
             title       => document.meta.title,
             description => document.meta.description,
             language    => document.meta.language,
@@ -1031,4 +1036,23 @@ fn add_externals(html: &str, externals: &[String]) -> Result<String> {
     rendered.insert_str(body_end, &scripts);
 
     Ok(rendered)
+}
+
+fn document_template_context(
+    document: &Document,
+    date_format: &str,
+) -> Value {
+    context! {
+        title          => document.meta.title.clone(),
+        slug           => document.meta.slug.clone(),
+        language       => document.meta.language.clone(),
+        description    => document.meta.description.clone(),
+        url            => document.meta.url.clone(),
+        date           => document.meta.date.map(
+            |date| date.format(date_format).to_string()
+        ),
+        featured_image => document.meta.featured_image.clone(),
+        externals      => document.meta.externals.clone(),
+        template       => document.template.clone(),
+    }
 }
