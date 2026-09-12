@@ -41,14 +41,13 @@ A blog post can override the site-wide theme in its front matter.
 
 AI-backed commands read their OpenAI configuration from the environment:
 
-| Variable | Purpose |
-| --- | --- |
-| `OPENAI_API_KEY` | API key used by `import` and `update`. |
-| `OPENAI_MODEL` | Text model used to generate HTML, CSS, SVG, and structured changes. |
-| `OPENAI_IMAGE_MODEL` | Model used to generate raster image assets. |
-| `OPENAI_IMAGE_QUALITY` | Quality passed to image generation. |
-| `OPENAI_BASE_URL` | Optional alternative API base URL, primarily useful for testing or compatible gateways. |
-| `LLM_CONCURRENCY` | Default concurrency for AI work when it is not overridden by `--threads`. |
+| Variable               | Purpose                                                                                 |
+|------------------------|-----------------------------------------------------------------------------------------|
+| `OPENAI_API_KEY`       | API key used by `import` and `update`.                                                  |
+| `OPENAI_MODEL`         | Text model used to generate HTML, CSS, SVG, and structured changes.                     |
+| `OPENAI_IMAGE_MODEL`   | Model used to generate raster image assets.                                             |
+| `OPENAI_IMAGE_QUALITY` | Quality passed to image generation.                                                     |
+| `OPENAI_BASE_URL`      | Optional alternative API base URL, primarily useful for testing or compatible gateways. |
 
 For a shell session:
 
@@ -92,4 +91,3 @@ Hbox owns the build treatment of these files:
 Source HTML must not reference `global.css`, `design.css`, or a generated
 `design.<hash>.css` directly. Hbox inserts the correct links after the final
 filenames are known.
-

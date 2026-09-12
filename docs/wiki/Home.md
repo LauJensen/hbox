@@ -27,7 +27,7 @@ Create and serve a site:
 
 ```sh
 hbox init example.com
-hbox serve example.com
+hbox preview example.com
 ```
 
 Hbox keeps source sites under `sites/` and writes production output under
@@ -107,4 +107,3 @@ injects them during the build.
 - [Configuration](Configuration.md)
 - [Commands](Commands.md)
 - [Blogging](Blogging.md)
-

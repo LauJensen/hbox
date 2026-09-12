@@ -35,8 +35,8 @@ An unsuccessful build therefore leaves the last published output intact.
 Build the site, serve it locally, and rebuild when source files change:
 
 ```sh
-hbox serve example.com
-hbox serve example.com --port 3000
+hbox preview example.com
+hbox preview example.com --port 3000
 ```
 
 The default port is `8080`. Validation findings are quality feedback; a site
@@ -48,7 +48,7 @@ broken links or missing fragments.
 Generate a page from an inspirational screenshot:
 
 ```sh
-hbox import example.com screenshot.png
+hbox import example.com screenshot.png index
 hbox import example.com screenshot.png about
 hbox import example.com screenshot.png about --threads 4
 ```
@@ -122,10 +122,9 @@ A typical AI-assisted change looks like this:
 
 ```sh
 hbox update example.com index "add a pricing section"
-hbox serve example.com-preview1
+hbox preview example.com 1
 hbox accept example.com 1
 ```
 
 The first command creates a complete preview, the second lets you inspect it,
 and the third promotes it only when you are satisfied.
-
