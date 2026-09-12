@@ -8,6 +8,9 @@ On its own, `hbox` is a static site builder which lets you create, maintain and 
 
 Blogging is a first class citizen, which supports converting pure markdown into blogposts.
 
+Building, validating and optimize (90% size reduction!), takes only seconds:
+[![hbox workflow](docs/images/build_validate_optimize.gif)](docs/images/build_validate_optimize.gif)
+
 On top of that, you can import a screenshot (possibly ai generated) of a website and import this directly as a page into an existing `hbox` site, or as the starting point for a brand new site. The screenshot is converted into developer-friendly semantic HTML and CSS.
 
 Example workflow:
