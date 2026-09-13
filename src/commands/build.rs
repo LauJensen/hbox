@@ -50,6 +50,8 @@ pub struct BuildReport {
 
 pub async fn run(args: BuildArgs) -> Result<()> {
     let site = ResolvedSite::resolve(&args.site)?;
+
+    println!("Building {}", &site.site_name);
     let report = build_site(&site)?;
 
     println!(
@@ -1064,5 +1066,5 @@ fn document_template_context(
 
 fn print_output_path(output_dir: &Path, path: &Path) {
     let relative = path.strip_prefix(output_dir).unwrap_or(path);
-    println!("✓ {}", relative.display());
+    println!(" ✓ {}", relative.display());
 }

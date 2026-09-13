@@ -46,11 +46,9 @@ Pick whichever model you feel is the best balance between speed, price and quali
 
 ## Why hbox?
 
-Modern AI tools can generate impressive visual website concepts quickly, but getting from a mockup to a clean, editable, deployable site is still awkward and maintaining, blogging and otherwise working with the site requires constant LLM use.
+Modern AI tools can generate impressive visual website concepts quickly, but getting from a mockup to a clean, editable, deployable site is still awkward. Maintaining, blogging and otherwise working with the site typically requires constant LLM use.
 
-`hbox` exists to close that gap.
-
-It lets you:
+hbox lets you:
 
 * Scaffold a simple static site
 * Import a screenshot or mockup as a real HTML page
@@ -61,6 +59,7 @@ It lets you:
 * Keep full ownership of the resulting code
 * Add repeatable/dynamic components via MiniJinja
 * Validate everything before deploying
+* Deploy with a single command
 
 `hbox` is not trying to be Webflow, Squarespace, or a full CMS - it's much simpler and it's yours.
 
@@ -122,15 +121,15 @@ This workflow is currently fully supported
 
 ```bash
 hbox init my-site
-hbox import my-site screenshot.png about
-hbox preview my-site 1   # Inspect, then stop with Ctrl+C
-hbox accept my-site 1
-hbox update my-site about "Use a green color-scheme instead"
-hbox preview my-site 1   # Inspect, then stop with Ctrl+C
-hbox accept my-site 1
-hbox build my-site
+hbox import   my-site screenshot.png about
+hbox preview  my-site 1   # Inspect, then stop with Ctrl+C
+hbox accept   my-site 1
+hbox update   my-site about "Use a green color-scheme instead"
+hbox preview  my-site 1   # Inspect, then stop with Ctrl+C
+hbox accept   my-site 1
+hbox build    my-site
 hbox optimize my-site
-rsync -az --delete dist/my-site/ deploy@example.com:/srv/hbox/my-site/
+hbox deploy   my-site
 ```
 
 The architecture is intentionally simple and may still change while the project matures.
@@ -145,6 +144,7 @@ An `hbox` site is just a folder of static files:
 sites/my-site/
   hbox.toml
   global.css
+  design.css
 
   pages/
     index.html
@@ -153,7 +153,6 @@ sites/my-site/
 
   partials/
     header.html
-    menu.html
     footer.html
 
   templates/
@@ -220,6 +219,56 @@ They can even use Markdown
 {% include "partials/footer.html" %}
 ```
 
+Every page has access to all blogpost meta data, ie
+
+``` html
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>All my blogposts</title>
+  </head>
+  <body>
+    {% include "partials/header.html" %}
+
+    <main>
+      <section class="section">
+        <div class="blog-posts-grid">
+
+          {% for post in posts %}
+
+          <div class="blog-card">
+
+            {% if post.date %}
+            <div class="blogdate">
+              {{ post.date }}
+            </div>
+            {% endif %}
+
+            <a href="{{ post.url }}">
+
+              {% if post.featured_image %}
+              <img class="blog-featured"
+                   alt="{{ post.title }}"
+                   src="{{ post.featured_image }}"/>
+              {% endif %}
+
+              <h2>{{ post.title }}</h2>
+              <p> {{ post.description }}</p>
+            </a>
+            <a class="readmore" href="{{ post.url }}">
+              <p class="readmore">Read more</p>
+            </a>
+          </div>
+
+          {% endfor %}
+      </section>
+    </main>
+
+    {% include "partials/footer.html" %}
+  </body>
+</html>
+
+```
 
 ### Templates are for generated content types
 
@@ -263,6 +312,7 @@ The contents are pure markdown with a small header. The following example shows 
 
 ```markdown
 ---
+draft:       false
 title:       "Flocking Quadtrees"
 slug:        "flocking-quadtrees"
 language:    "en"
@@ -270,7 +320,6 @@ description: "Learn how to make a flocking simulation using Quadtrees and Clojur
 date:        "2025-12-15"
 image:       "/blogposts/flocking_quadtrees.png"
 template:    "templates/blogpost.html"
-draft:       false
 code_theme:  "ocean-dark"
 externals:
   - https://cdn.jsdelivr.net/gh/LauJensen/practical-quadtree@master/public/js/main.js
@@ -430,8 +479,8 @@ You can take a shortcut and achieve the same, by adding this to your sites `hbox
 
 ``` toml
 [deployment]
-ssh_user = "deploy"
-ssh_host = "example.com"
+ssh_user    = "deploy"
+ssh_host    = "example.com"
 deploy_path = "/srv/hbox"
 ```
 
@@ -442,6 +491,16 @@ To deploy, simply run
 ``` bash
 hbox deploy my-site
 ```
+## Disclaimer
+
+There are two important risks you should understand before using Hbox:
+
+1. **API usage costs money.** Hbox can make requests to third-party LLM and image-generation APIs. You are solely responsible for monitoring your usage and any resulting charges.
+
+2. **Deployment requires careful server configuration.** Hbox may deploy an `nginx.conf` file that is subsequently loaded by the system nginx process. Anyone who gains access to the configured SSH deployment account may therefore be able to modify your website and its nginx configuration. Use a dedicated, minimally privileged deployment account, restrict its SSH access, and keep your local SSH private keys secure.
+
+Hbox is provided “as is,” without warranty. You are responsible for reviewing generated files, deployment configuration, permissions, and API usage before using Hbox in production.
+
 
 ## License
 
