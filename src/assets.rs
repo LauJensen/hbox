@@ -115,11 +115,9 @@ pub fn install_assets(
     Ok(())
 }
 
-/// Returns every actionable problem in a manifest so callers can send all of
-/// them back to the model in a single repair request.
 pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
     let mut problems = Vec::new();
-    let mut staged_filenames = HashSet::<PathBuf>::new();
+    let mut manifest_filenames = HashSet::<PathBuf>::new();
     let mut public_paths = HashSet::<PathBuf>::new();
 
     for (index, asset) in manifest.assets.iter().enumerate() {
@@ -127,6 +125,26 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
             "assets[{index}] ('{}')",
             asset.filename
         );
+
+        let filename = match safe_relative_path(&asset.filename) {
+            Ok(filename) => {
+                if !manifest_filenames.insert(filename.to_path_buf()) {
+                    problems.push(format!(
+                        "{label}: duplicate manifest filename '{}'",
+                        asset.filename
+                    ));
+                }
+
+                Some(filename)
+            }
+
+            Err(error) => {
+                problems.push(format!(
+                    "{label}: invalid filename: {error}"
+                ));
+                None
+            }
+        };
 
         if asset.description.trim().is_empty() {
             problems.push(format!(
@@ -157,9 +175,30 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
                          .jpeg, or .webp"
                     ));
                 }
+
+                if !matches!(
+                    asset.size.as_deref(),
+                    Some(
+                        "1024x1024"
+                            | "1024x1536"
+                            | "1536x1024"
+                            | "auto"
+                    )
+                ) {
+                    problems.push(format!(
+                        "{label}: image size must be 1024x1024, \
+                         1024x1536, 1536x1024, or auto"
+                    ));
+                }
             }
 
             AssetKind::Svg => {
+                if asset.generation_prompt.trim().is_empty() {
+                    problems.push(format!(
+                        "{label}: SVG generation prompt must not be empty"
+                    ));
+                }
+
                 if asset.svg_code.trim().is_empty() {
                     problems.push(format!(
                         "{label}: SVG source must not be empty"
@@ -169,6 +208,12 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
                 if !has_extension(&asset.filename, &["svg"]) {
                     problems.push(format!(
                         "{label}: SVG filename must end in .svg"
+                    ));
+                }
+
+                if asset.size.as_deref() != Some("auto") {
+                    problems.push(format!(
+                        "{label}: SVG size must be auto"
                     ));
                 }
             }
@@ -184,6 +229,21 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
                     problems.push(format!(
                         "{label}: CSS-generated assets must have empty \
                          svg_code"
+                    ));
+                }
+
+                if asset.size.is_some() {
+                    problems.push(format!(
+                        "{label}: CSS-generated asset size must be null"
+                    ));
+                }
+
+                if filename.is_some_and(|filename| {
+                    filename.components().count() != 1
+                }) {
+                    problems.push(format!(
+                        "{label}: CSS-generated filename must be a \
+                         single identifier, not a path"
                     ));
                 }
             }
@@ -205,21 +265,19 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
             continue;
         };
 
-        let filename = match safe_relative_path(&asset.filename) {
-            Ok(filename) => filename,
-            Err(error) => {
-                problems.push(format!(
-                    "{label}: invalid filename: {error}"
-                ));
-                continue;
-            }
+        let Some(filename) = filename else {
+            continue;
         };
 
-        if !staged_filenames.insert(filename.to_path_buf()) {
+        if matches!(asset.kind, AssetKind::Image | AssetKind::Svg)
+            && (filename.starts_with("images")
+                || filename.starts_with("public/images"))
+        {
             problems.push(format!(
-                "{label}: duplicate staged filename '{}'",
-                asset.filename
+                "{label}: filename must not begin with images/ or \
+                 public/images/"
             ));
+            continue;
         }
 
         if !public_paths.insert(public_path) {
@@ -247,6 +305,41 @@ pub fn validate_manifest(manifest: &AssetsManifest) -> Result<()> {
 
     bail!(
         "invalid asset manifest:\n{}",
+        format_manifest_problems(&problems)
+    )
+}
+
+/// Ensures every generated file-backed asset is referenced through the public
+/// URL derived from its manifest filename.
+pub fn validate_asset_references<'a>(
+    manifest: &AssetsManifest,
+    source_files: impl IntoIterator<Item = &'a str>,
+) -> Result<()> {
+    let source_files = source_files.into_iter().collect::<Vec<_>>();
+    let mut problems = Vec::new();
+
+    for asset in &manifest.assets {
+        let Some(public_url) = asset.public_url() else {
+            continue;
+        };
+
+        if !source_files
+            .iter()
+            .any(|source| source.contains(&public_url))
+        {
+            problems.push(format!(
+                "asset '{}' must be referenced as {public_url}",
+                asset.filename
+            ));
+        }
+    }
+
+    if problems.is_empty() {
+        return Ok(());
+    }
+
+    bail!(
+        "invalid asset references:\n{}",
         format_manifest_problems(&problems)
     )
 }

@@ -4,13 +4,15 @@ Analyze the attached website screenshot and produce a compact JSON design brief.
 
 Do not write HTML or CSS.
 
-The goal is not pixel-perfect reconstruction.
-The goal is to capture enough structure, content, visual direction, color palette,
-layout intent, section hierarchy, reusable component primitives, and asset needs
-for a later generation step to build the page with complete page-specific CSS.
+Aim for high visual fidelity without overfitting noisy individual pixel measurements.
+Capture enough structure, content, visual direction, color palette, layout intent,
+section hierarchy, reusable component primitives, and asset needs for the later
+generation step to build complete Hbox source files.
 
-Assume global.css provides only a minimal reset/base layer.
-Do not assume global.css provides the final visual design.
+Assume global.css provides design-neutral structural primitives for containers,
+sections, grids, rows, columns, stacks, cards, media frames, and responsive
+layout. It does not provide the site's colors, typography, branding, or
+page-specific visual treatment.
 
 Capture the design as a coherent visual system:
 
@@ -28,9 +30,15 @@ Capture the design as a coherent visual system:
 
 You must include a component_system object.
 
-The component_system captures reusable visual primitives that must constrain the later HTML/CSS generation step. Do not leave important reusable visual details only in section notes.
+The component_system captures reusable visual primitives that must constrain
+the later HTML/CSS generation step. Do not leave important reusable visual
+details only in section notes.
 
-Include these component_system groups when visible:
+Populate every component_system group required by the schema. Describe the
+observed treatment when it is visible. When a primitive is not present in the
+screenshot, state that it is not visible rather than inventing one.
+
+The required component_system groups are:
 
 * buttons: primary, secondary, header CTA, icon buttons, text links
 * cards: feature cards, stat cards, media cards, case-study cards, article cards
@@ -42,6 +50,7 @@ Include these component_system groups when visible:
 * links: inline links, arrow links, CTA links
 * logo_clouds: client logo treatment, orientation, contrast, spacing
 * backgrounds: page background, section backgrounds, hero background, localized glows, forbidden large color washes
+
 For each relevant component primitive, include implementation-binding values where visually inferable:
 
 * shape: rectangular, rounded rectangle, pill, circle, square
@@ -74,6 +83,12 @@ Do not leave important business sections empty.
 
 For assets:
 
+* every asset must have a non-empty description and generation_prompt
+* for image and SVG assets, filename is relative to the public images directory
+* filename must not begin with "/", "images/", or "public/images/"
+* image filenames must end in .png, .jpg, .jpeg, or .webp
+* SVG filenames must end in .svg
+* for css_generated assets, filename is a non-empty descriptive identifier such as hero-glow, not a path or public URL
 * include raster image assets only for complex visual artwork, photos, screenshots, or illustrations
 * use SVG assets for logos, brand marks, meaningful icons, and simple identifiable vector graphics
 * use css_generated for simple gradients, decorative glows, patterns, separators, dots, sparkles, abstract ornaments, and shapes that should be built in CSS

@@ -9,13 +9,14 @@ The task-specific prompt and supplied JSON schema are authoritative. Follow them
 
 When generating source files, Hbox uses:
 
-- page_html for the complete semantic MiniJinja HTML document
-- design_css for reusable site-wide visual design
-- page_css for styling specific to one page
-- assets_manifest for local raster images, SVG assets, and CSS-generated visuals
-- header_html and footer_html when the task-specific partial rules request them
+* page_html for the complete semantic MiniJinja HTML document
+* design_css for reusable site-wide visual design
+* page_css for styling specific to one page
+* assets_manifest for local raster images, SVG assets, and CSS-generated visuals
+* header_html and footer_html when the task-specific partial rules request them
 
-Hbox does not use content.json. Visible page content belongs directly in page_html.
+Hbox does not use content.json. Visible content belongs directly in page_html
+or, for shared header and footer content, in the corresponding returned partial.
 
 Priorities:
 

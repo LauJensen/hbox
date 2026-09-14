@@ -18,6 +18,8 @@ use crate::{
         generate_assets,
         install_assets,
         remove_staging_dir,
+        validate_asset_references,
+        validate_manifest,
     },
     cli::ImportDesignArgs,
     commands::build::build_site,
@@ -480,6 +482,21 @@ fn validate_import_result(result: &DesignImportResult) -> Result<()> {
             bail!("design_css must be null or a non-empty string");
         }
     }
+
+    validate_manifest(&files.assets_manifest)
+        .context("OpenAI returned an invalid assets manifest")?;
+
+    validate_asset_references(
+        &files.assets_manifest,
+        [
+            files.page_html.as_str(),
+            files.page_css.as_deref().unwrap_or_default(),
+            files.design_css.as_deref().unwrap_or_default(),
+            files.header_html.as_deref().unwrap_or_default(),
+            files.footer_html.as_deref().unwrap_or_default(),
+        ],
+    )
+    .context("OpenAI returned invalid asset references")?;
 
     Ok(())
 }

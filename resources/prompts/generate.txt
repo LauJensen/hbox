@@ -5,23 +5,23 @@ Use the supplied design specification and shared partial rules.
 Return exactly one JSON object matching this shape:
 
 {
-  "page_html": "string",
-  "design_css": "string or null",
-  "page_css": "string or null",
-  "assets_manifest": {
-    "assets": [
-      {
-        "filename": "string",
-        "kind": "image | svg | css_generated",
-        "description": "string",
-        "generation_prompt": "string",
-        "size": "1024x1024 | 1024x1536 | 1536x1024 | auto",
-        "svg_code": "string"
-      }
-    ]
-  },
-  "header_html": "string or null",
-  "footer_html": "string or null"
+"page_html": "string",
+"design_css": "string or null",
+"page_css": "string or null",
+"assets_manifest": {
+"assets": [
+{
+"filename": "string",
+"kind": "image | svg | css_generated",
+"description": "string",
+"generation_prompt": "string",
+"size": "1024x1024 | 1024x1536 | 1536x1024 | auto | null",
+"svg_code": "string"
+}
+]
+},
+"header_html": "string or null",
+"footer_html": "string or null"
 }
 
 Do not wrap the JSON in Markdown.
@@ -30,7 +30,11 @@ Every field shown above must be present.
 Use null for optional output that is not needed.
 Never return an empty string for an optional field. Return null instead.
 
-All HTML displayed as code, if any, must be HTML-escaped and placed inside <pre><code>. Never embed raw <html>, <head>, <body>, <link> or <script> elements in a code example.
+If the rendered page visibly presents HTML or MiniJinja source as code, escape
+that example and place it inside <pre><code>. Never place raw HTML elements or
+literal MiniJinja delimiters such as {{, {%, or {# inside a visible code
+example. Use HTML entities so the example is displayed rather than parsed or
+executed.
 
 # Primary objective
 
@@ -272,16 +276,16 @@ page_html must:
 
 * be a complete Hbox page template
 * contain a complete HTML document
-* include an html element
+* include an html element with a valid, non-empty lang attribute inferred from the page content
 * use semantic HTML
 * contain all visible text directly in the rendered HTML
 * use the shared partial includes exactly as instructed
-* reference assets using their assets_manifest filename
 * use Hbox global layout classes where appropriate
 * use reusable visual component classes defined in design_css
 * use page-specific classes defined in page_css
 * reproduce the design specification as closely as possible
 * remain readable and maintainable
+* follow the asset filename and public URL contract below
 
 page_html must not:
 
@@ -473,13 +477,17 @@ It must have exactly this shape:
 "kind": "image | svg | css_generated",
 "description": "string",
 "generation_prompt": "string",
-"size": "1024x1024 | 1024x1536 | 1536x1024 | auto",
+"size": "1024x1024 | 1024x1536 | 1536x1024 | auto | null",
 "svg_code": "string"
 }
 ]
 }
 
-Include every external asset referenced by page_html, header_html, footer_html, design_css, or page_css.
+Implement every asset required by the design specification. Include every local
+file-backed visual asset referenced directly by page_html, header_html,
+footer_html, design_css, or page_css. Do not hotlink remote images or SVGs.
+
+If the design requires no assets, return an empty assets array.
 
 Every manifest item must include:
 
@@ -490,9 +498,43 @@ Every manifest item must include:
 * size
 * svg_code
 
+description must be a non-empty explanation of the asset's purpose.
+
 Each asset must represent exactly one visual asset.
 
 Do not combine multiple icons, images, logos, illustrations, or UI elements into one asset.
+
+## Asset filenames and public URLs
+
+For image and SVG assets, filename is a safe path relative to the public images
+directory. It may contain subdirectories, but it must not:
+
+* be absolute
+* begin with a slash
+* begin with images/ or public/images/
+* contain . or .. path components
+* contain backslashes, a query string, or a fragment
+
+For example, use hero.jpg or case-studies/hero.jpg as the manifest filename.
+
+Hbox installs image and SVG assets beneath public/images/. Reference every such
+asset from page_html, header_html, footer_html, design_css, and page_css using
+its public URL:
+
+`/images/{filename}`
+
+For example, a manifest filename of hero.jpg has the public URL
+/images/hero.jpg. A manifest filename of case-studies/hero.jpg has the public
+URL /images/case-studies/hero.jpg.
+
+Never use hero.jpg, images/hero.jpg, or public/images/hero.jpg as the public URL.
+In CSS, use url("/images/{filename}").
+
+CSS-generated assets are not file-backed and must not be referenced through a
+URL or img element.
+
+Every file-backed asset in assets_manifest must be referenced by at least one
+returned HTML or CSS field. Do not generate unused file-backed assets.
 
 ## Raster assets
 
@@ -519,8 +561,8 @@ For image assets:
 
 * svg_code must be an empty string
 * generation_prompt must be detailed enough to generate the intended visual
-* size must use one of the allowed values
-* filename should use an appropriate raster extension
+* size must be "1024x1024", "1024x1536", "1536x1024", or "auto"; it must not be null
+* filename must end in .png, .jpg, .jpeg, or .webp
 
 ## SVG assets
 
@@ -529,7 +571,7 @@ Use kind = "svg" for external logos, brand marks, fixed-color icons, and standal
 For SVG assets:
 
 * svg_code must contain complete, valid SVG XML
-* generation_prompt must still describe the intended asset
+* generation_prompt must describe the intended asset
 * filename must end in .svg
 * size must be "auto"
 
@@ -542,8 +584,10 @@ Use kind = "css_generated" only when the design specification explicitly treats 
 
 For CSS-generated assets:
 
+* filename must be a non-empty descriptive identifier such as hero-glow; it is not a path or public URL
 * svg_code must be an empty string
 * generation_prompt must explain that the visual is CSS-generated
+* size must be null
 * do not reference the item through an img element
 * the actual CSS must appear in design_css or page_css according to ownership
 
@@ -582,6 +626,7 @@ Before returning the JSON, verify all of the following:
 
 * page_html is non-empty
 * page_html contains a complete HTML document
+* the html element has a valid, non-empty lang attribute
 * page_html contains no style elements
 * page_html contains no inline style attributes
 * page_html contains no {{ content }}
@@ -594,8 +639,13 @@ Before returning the JSON, verify all of the following:
 * page-specific rules are in page_css
 * global.css has not been recreated
 * CSS is not duplicated between design_css and page_css
-* every referenced external asset exists in assets_manifest
+* every manifest description is non-empty
+* every referenced local file-backed visual asset exists in assets_manifest
+* every file-backed image and SVG reference uses /images/{filename}
+* every file-backed manifest asset is referenced by returned HTML or CSS
+* every CSS-generated manifest asset has corresponding returned CSS
 * every SVG manifest item contains valid SVG XML
 * every non-SVG manifest item has an empty svg_code
+* every manifest size follows the rules for its asset kind
 * the result contains exactly the required JSON fields
 * the response contains no Markdown or commentary

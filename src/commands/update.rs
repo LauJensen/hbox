@@ -16,6 +16,7 @@ use crate::assets::{
     remove_staging_dir,
     safe_relative_path,
     validate_manifest,
+    validate_asset_references,
 };
 
 use crate::{
@@ -79,8 +80,13 @@ pub async fn run(args: UpdateDesignArgs) -> Result<()> {
         )
         .await?;
 
-    validate_update(&update)?;
+    validate_update(&update, &source)?;
     cache_prompt(&source_site, &args.slug, &args.prompt)?;
+
+    println!(
+        "Update requested {} new or replacement asset(s).",
+        update.assets_manifest.assets.len()
+    );
 
     let (preview_site, preview_num) =
         create_preview_site_dir(&site)?;
@@ -207,9 +213,16 @@ fn update_prompt(user_prompt: &str, source: &SourceFiles) -> Result<String> {
     ))
 }
 
-fn validate_update(update: &SiteUpdate) -> Result<()> {
-    if update.page_html.trim().is_empty() || !update.page_html.contains("<html") {
-        bail!("updated page_html is empty or does not contain an html element");
+fn validate_update(
+    update: &SiteUpdate,
+    source: &SourceFiles,
+) -> Result<()> {
+    if update.page_html.trim().is_empty()
+        || !update.page_html.contains("<html")
+    {
+        bail!(
+            "updated page_html is empty or does not contain an html element"
+        );
     }
 
     for (name, contents) in [
@@ -224,6 +237,28 @@ fn validate_update(update: &SiteUpdate) -> Result<()> {
 
     validate_manifest(&update.assets_manifest)
         .context("OpenAI returned an invalid assets manifest")?;
+
+    validate_asset_references(
+        &update.assets_manifest,
+        [
+            update.page_html.as_str(),
+            update
+                .page_css
+                .as_deref()
+                .or(source.page_css.as_deref())
+                .unwrap_or_default(),
+            update
+                .design_css
+                .as_deref()
+                .or(source.design_css.as_deref())
+                .unwrap_or_default(),
+            update
+                .global_css
+                .as_deref()
+                .unwrap_or(source.global_css.as_str()),
+        ],
+    )
+    .context("OpenAI returned invalid asset references")?;
 
     Ok(())
 }
