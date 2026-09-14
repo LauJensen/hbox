@@ -3,7 +3,8 @@
 use std::process::{ExitCode, Termination};
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory,Parser};
+use clap_complete::CompleteEnv;
 
 macro_rules! dev_print {
     ($format:literal $(, $value:expr)* $(,)?) => {
@@ -107,5 +108,7 @@ async fn run(cli: Cli) -> Result<CommandOutcome> {
 
 #[tokio::main]
 async fn main() -> Result<CommandOutcome> {
+    CompleteEnv::with_factory(Cli::command).complete();
+
     run(Cli::parse()).await
 }

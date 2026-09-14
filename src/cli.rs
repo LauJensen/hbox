@@ -1,9 +1,15 @@
 use std::{
+    ffi::OsStr,
+    fs,
     num::{NonZeroUsize,NonZeroU32},
     path::PathBuf,
 };
 
 use clap::{Args, Parser, Subcommand};
+use clap_complete::engine::{
+    ArgValueCompleter,
+    CompletionCandidate,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "hbox")]
@@ -60,6 +66,7 @@ pub struct InitArgs {
 #[derive(Debug, Args)]
 pub struct ImportDesignArgs {
     /// Site to add page to
+    #[arg(value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site_name: PathBuf,
 
     /// Path to inspirational screenshot
@@ -75,8 +82,8 @@ pub struct ImportDesignArgs {
 
 #[derive(Debug, Args)]
 pub struct AcceptPreviewArgs {
-   #[arg(index=1)]
     /// Site which has previews
+    #[arg(value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site_name: PathBuf,
 
     /// Preview number to accept
@@ -86,14 +93,15 @@ pub struct AcceptPreviewArgs {
 
 #[derive(Debug, Args)]
 pub struct DeployArgs {
-   #[arg(index=1)]
     /// Site to publish
+    #[arg(index=1,value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site_name: PathBuf,
 }
 
 #[derive(Debug, Args)]
 pub struct UpdateDesignArgs {
     /// Site to add page to
+    #[arg(value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site_name: PathBuf,
     /// Name of page (slug)
     pub slug: String,
@@ -108,18 +116,21 @@ pub struct UpdateDesignArgs {
 #[derive(Debug, Args)]
 pub struct BuildArgs {
     /// Name of the site, e.g. lbjgruppen.com
+    #[arg(value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site: PathBuf,
 }
 
 #[derive(Debug, Args)]
 pub struct OptimizeArgs {
     /// Name of the site, e.g. lbjgruppen.com
+    #[arg(value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site_name: PathBuf,
 }
 
 #[derive(Debug, Args)]
 pub struct PreviewArgs {
     /// Name of the site, e.g. lbjgruppen.com
+    #[arg(value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site: PathBuf,
 
     /// Preview number to serve
@@ -133,9 +144,32 @@ pub struct PreviewArgs {
 #[derive(Debug, Args)]
 pub struct ValidateArgs {
     /// Name of the site, e.g. lbjgruppen.com
+    #[arg(value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site: PathBuf,
 
     /// Verify external HTTP links?
     #[arg(long)]
     pub check_external_links: bool,
+}
+
+fn complete_site(current: &OsStr) -> Vec<CompletionCandidate> {
+    let current = current.to_string_lossy();
+
+    let Ok(entries) = fs::read_dir("sites") else {
+        return Vec::new();
+    };
+
+    let mut names = entries
+        .filter_map(Result::ok)
+        .filter(    |entry| { entry.file_type().is_ok_and(|kind| kind.is_dir()) })
+        .filter_map(|entry|   entry.file_name().into_string().ok())
+        .filter(    |name|    name.starts_with(current.as_ref()))
+        .collect::<Vec<_>>();
+
+    names.sort();
+
+    names
+        .into_iter()
+        .map(CompletionCandidate::new)
+        .collect()
 }

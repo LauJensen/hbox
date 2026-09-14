@@ -62,3 +62,4 @@ sha2 = "0.10"
 textwrap = { version = "0.16", default-features = false }
 fastrand = "2"
 rayon = "1"
+clap_complete = { version = "4", features = ["unstable-dynamic"] }
