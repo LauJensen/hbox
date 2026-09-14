@@ -1,8 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    path::{Path, PathBuf},
-    time::Duration,
+    collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}, sync::Arc, time::Duration,
 };
 
 use anyhow::{bail, Context, Result};
@@ -65,11 +62,10 @@ impl ReferenceKind {
 
 /// Validates the generated output for a site and prints a per-file report.
 pub async fn run(args: ValidateArgs) -> Result<ValidationReport> {
-    let start_time = std::time::Instant::now();
     let site = ResolvedSite::resolve(&args.site)?;
 
-    let report = validate_site(&site.output_dir(), args.check_external_links).await?;
-    eprintln!("Site checked in: {:?}", start_time.elapsed());
+    println!("Validating {}", site.site_name);
+    let report = validate_site(site.output_dir(), args.check_external_links).await?;
 
     Ok(report)
 }
@@ -79,6 +75,7 @@ pub async fn validate_site(
     dist_dir: &Path,
     check_external_links: bool,
 ) -> Result<ValidationReport> {
+    let start_time = std::time::Instant::now();
     let dist_dir = fs::canonicalize(dist_dir)
         .with_context(|| format!("Failed to open generated site: {}", dist_dir.display()))?;
 
@@ -127,7 +124,13 @@ pub async fn validate_site(
         .sum();
 
     let pages_inspected = html_files.len();
-    print_report(&dist_dir, &reports, errors, pages_inspected);
+    print_report(
+        &dist_dir,
+        &reports,
+        errors,
+        pages_inspected,
+        start_time.elapsed(),
+    );
 
     Ok(ValidationReport {
         errors,
@@ -319,13 +322,12 @@ fn validate_document_language(document: &NodeRef, source: &str, issues: &mut Vec
             let attributes = html.attributes.borrow();
             if attributes
                 .get("lang")
-                .map_or(true, |language| language.trim().is_empty())
-            {
-                issues.push(Issue {
-                    line: Some(html_line),
-                    message: "missing html lang attribute".to_owned(),
-                });
-            }
+                .is_none_or(|language| language.trim().is_empty()) {
+                    issues.push(Issue {
+                        line: Some(html_line),
+                        message: "missing html lang attribute".to_owned(),
+                    });
+                }
         }
         Err(_) => unreachable!("the source contains an html element"),
     }
@@ -363,9 +365,10 @@ fn validate_anchors(document: &NodeRef, source: &str, issues: &mut Vec<Issue>) {
         .enumerate()
     {
         let attributes = anchor.attributes.borrow();
+
         if attributes
             .get("href")
-            .map_or(true, |target| target.trim().is_empty())
+            .is_none_or(|target| target.trim().is_empty())
         {
             issues.push(Issue {
                 line: nth_tag_line(source, "a", index),
@@ -429,15 +432,14 @@ fn validate_reference(
         }
     };
 
-    if let Some(fragment) = fragment.filter(|fragment| !fragment.is_empty()) {
-        if has_extension(&target_file, "html") {
-            let ids = document_ids(&target_file, id_cache)?;
+    if let Some(fragment) = fragment.filter(|fragment| !fragment.is_empty())
+           && has_extension(&target_file, "html") {
+        let ids = document_ids(&target_file, id_cache)?;
             if !ids.contains(fragment) {
                 issues.push(Issue {
                     line,
                     message: format!("missing fragment target: {target}"),
                 });
-            }
         }
     }
 
@@ -698,15 +700,21 @@ fn line_number(source: &str, offset: usize) -> usize {
     source[..offset].bytes().filter(|byte| *byte == b'\n').count() + 1
 }
 
-pub fn print_report(dist_dir: &Path, reports: &[FileReport], errors: usize, pages: usize) {
+pub fn print_report(
+    dist_dir: &Path,
+    reports: &[FileReport],
+    errors: usize,
+    pages: usize,
+    elapsed: Duration)
+{
     for report in reports {
         let path = report.path.strip_prefix(dist_dir).unwrap_or(&report.path);
         if report.issues.is_empty() {
-            println!("[ OK  ] {}", path.display());
+            println!(" ✓ {}", path.display());
             continue;
         }
 
-        println!("[ ERR ] {}", path.display());
+        println!(" 🗙 {}", path.display());
         for issue in &report.issues {
             match issue.line {
                 Some(line) => println!("-> {} (line {line})", issue.message),
@@ -716,8 +724,8 @@ pub fn print_report(dist_dir: &Path, reports: &[FileReport], errors: usize, page
     }
 
     if errors == 0 {
-        println!("✔️ SITE VALIDATE: 0 errors, {pages} pages inspected");
+        println!("✔️ SITE VALID: 0 errors, {pages} pages inspected in {:.2?}", elapsed);
     } else {
-        println!("🗙 SITE INVALID: {errors} errors, {pages} pages inspected");
+        println!("🗙 SITE INVALID: {errors} errors, {pages} pages inspected in {:.2?}", elapsed);
     }
 }
