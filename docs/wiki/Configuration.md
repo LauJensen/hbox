@@ -12,18 +12,41 @@ default_language = "en"
 date_format = "%d.%m.%Y"
 default_title = "Example"
 code_theme = "ocean-dark"
+
+[optimizations]
+webp_quality       = 90
+
+[deployment]
+ssh_user    = "youruser"
+ssh_host    = "yourhost.com"
+deploy_path = "/srv/hbox"
+build       = true
+optimize    = true
+validate    = true
 ```
 
 ## Site settings
 
-| Setting | Required | Description |
-| --- | --- | --- |
-| `name` | Yes | Human-readable site name exposed to templates as `site.name`. |
-| `base_url` | No | Canonical public origin, without a trailing path. |
-| `default_language` | No | Language used when a blog post omits `language`. |
-| `date_format` | No | Chrono/strftime format used when dates are exposed to templates. For example, `%d.%m.%Y` produces `06.09.2026`. |
-| `default_title` | No | Site-wide fallback title available to templates. |
-| `code_theme` | No | Default syntax-highlighting theme for fenced code blocks. |
+| Setting            | Required | Description                                                                                                     |
+|--------------------|----------|-----------------------------------------------------------------------------------------------------------------|
+| `name`             | Yes      | Human-readable site name exposed to templates as `site.name`.                                                   |
+| `base_url`         | No       | Canonical public origin, without a trailing path.                                                               |
+| `default_language` | No       | Language used when a blog post omits `language`.                                                                |
+| `date_format`      | No       | Chrono/strftime format used when dates are exposed to templates. For example, `%d.%m.%Y` produces `06.09.2026`. |
+| `default_title`    | No       | Site-wide fallback title available to templates.                                                                |
+| `code_theme`       | No       | Default syntax-highlighting theme for fenced code blocks.                                                       |
+|--------------------|----------|-----------------------------------------------------------------------------------------------------------------|
+| webp_quality       | No       | Quality setting when optimizing images                                                                          |
+|--------------------|----------|-----------------------------------------------------------------------------------------------------------------|
+| [deployment]       | No       | The following are required only for the deploy command                                                          |
+|--------------------|----------|-----------------------------------------------------------------------------------------------------------------|
+| ssh_user           | Yes      |                                                                                                                 |
+| ssh_host           | Yes      |                                                                                                                 |
+| deploy_path        | Yes      | Site will be copied to this folder/sitename                                                                     |
+| build              | No       | Run build before deploy?                                                                                        |
+| optimize           | No       | Run optimize before deploy?                                                                                     |
+| validate           | No       | Run validate before deploy?                                                                                     |
+|                    |          |                                                                                                                 |
 
 Available code themes are:
 

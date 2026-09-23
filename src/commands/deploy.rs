@@ -5,7 +5,11 @@ use std::{
 
 use crate::{
     cli::DeployArgs,
-    config::{load_config,ResolvedSite},
+    commands::{
+        build::{build_site},
+        optimize::{optimize},
+        validate::{validate_site}},
+    config::{ResolvedSite, load_config},
 };
 
 
@@ -24,6 +28,23 @@ pub async fn run(args: DeployArgs) -> Result<()> {
     let Some(deployment) = config.deployment.as_ref() else {
         bail!("The [deployment] section of hbox.toml is not filled out!");
     };
+
+    if deployment.build == Some(true) {
+        build_site(&site)?;
+    }
+
+    if deployment.validate == Some(true) {
+        validate_site(site.output_dir(), false).await?;
+    }
+
+    if deployment.optimize == Some(true) {
+        optimize(
+            &site.output_dir(),
+            config.optimizations.webp_quality
+        )?;
+    }
+
+    eprintln!("\nrsync start: {}", &site.site_name);
 
     rsync_deploy(
         &site.output_dir(),

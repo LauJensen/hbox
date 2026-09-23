@@ -1,5 +1,8 @@
 use std::{
-    collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}, sync::Arc, time::Duration,
+    collections::{HashMap, HashSet},
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
 };
 
 use anyhow::{bail, Context, Result};

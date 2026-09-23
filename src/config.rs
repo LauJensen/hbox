@@ -30,9 +30,12 @@ pub struct SiteConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeployConfig {
-    pub ssh_user: String,
-    pub ssh_host: String,
+    pub ssh_user:    String,
+    pub ssh_host:    String,
     pub deploy_path: String,
+    pub build:       Option<bool>,
+    pub optimize:    Option<bool>,
+    pub validate:    Option<bool>,
 }
 
 
