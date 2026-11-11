@@ -17,7 +17,7 @@ function cleanHtmlString(html) {
     parsed
         .querySelectorAll(".hboxUtils")
         .forEach((node) => node.remove());
-
+  
     return "<!doctype html>\n" + parsed.documentElement.outerHTML.trim();
 }
 
@@ -35,6 +35,9 @@ function printHtmlDiff(a, b) {
         a[index] === b[index]
     ) {
         index++;
+      console.log(hetz);
+      
+      
     }
 
     const context = 300;

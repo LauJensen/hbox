@@ -585,22 +585,22 @@ fn render_html_pages(
         let target =
             output_file_for_html_page(output_dir, pages_dir, source, &rendered)?;
 
-        let rendered = inject_site_stylesheets(&rendered, stylesheets)?;
-        let css_source = source.with_extension("css");
-
-        let final_html = if css_source.is_file() {
-            //println!("Page {} has custom CSS", source.display());
-            // fs::read_to_string(&css_source).with_context(|| {
-            let page_css = minify_stylesheet_source(&css_source)?;
-
-            inline_page_css(&rendered, &page_css)?
-        } else if css_source.exists() {
-            bail!(
-                "Page CSS path exists but is not a file: {}",
-                css_source.display()
-            );
-        } else {
+        let preserved = crate::url_import::PreservedPage::load(site_dir, source)?;
+        let final_html = if let Some(page) = preserved {
+            page.emit_styles(site_dir, output_dir)?;
             rendered
+        } else {
+            let rendered = inject_site_stylesheets(&rendered, stylesheets)?;
+            let css_source = source.with_extension("css");
+            let rendered = if css_source.is_file() {
+                let page_css = minify_stylesheet_source(&css_source)?;
+                inline_page_css(&rendered, &page_css)?
+            } else if css_source.exists() {
+                bail!("Page CSS path exists but is not a file: {}", css_source.display());
+            } else {
+                rendered
+            };
+            add_page_script(&rendered, source, pages_dir, output_dir)?
         };
 
         if let Some(parent) = target.parent() {
@@ -620,6 +620,47 @@ fn render_html_pages(
     Ok(pages_built)
 }
 
+/// Publishes an optional page companion script under a content hash. Scripts are
+/// ordinary browser JavaScript, never MiniJinja templates or imported runtimes.
+fn add_page_script(
+    html: &str,
+    source: &Path,
+    pages_dir: &Path,
+    output_dir: &Path,
+) -> Result<String> {
+    let script_source = source.with_extension("js");
+    if !script_source.exists() {
+        return Ok(html.to_owned());
+    }
+    if !script_source.is_file() {
+        bail!("page JavaScript is not a file: {}", script_source.display());
+    }
+    let script = fs::read_to_string(&script_source)
+        .with_context(|| format!("failed to read {}", script_source.display()))?;
+    if script.trim().is_empty() {
+        return Ok(html.to_owned());
+    }
+    let relative = source.strip_prefix(pages_dir)?;
+    let name = relative.file_stem().and_then(OsStr::to_str)
+        .context("invalid page script name")?;
+    let filename = format!("{name}.{}.js", content_hash(&script));
+    let relative_script = Path::new("js")
+        .join(relative.parent().unwrap_or(Path::new("")))
+        .join(filename);
+    let target = output_dir.join(&relative_script);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&target, script).with_context(|| format!("failed to write {}", target.display()))?;
+    let url = format!("/{}", relative_script.to_string_lossy().replace('\\', "/"));
+    let url = html_escape::encode_double_quoted_attribute(&url);
+    let end = html.to_ascii_lowercase().rfind("</body>")
+        .context("cannot inject page JavaScript: missing </body>")?;
+    let mut output = html.to_owned();
+    output.insert_str(end, &format!("<script defer src=\"{url}\"></script>"));
+    Ok(output)
+}
+
 /// Minifies site CSS and emits the optional design stylesheet under a content hash.
 fn build_site_stylesheets(
     site_dir: &Path,
@@ -633,7 +674,9 @@ fn build_site_stylesheets(
     let design_source = site_dir.join("design.css");
 
     let design_href = if design_source.is_file() {
-        let minified = minify_stylesheet_source(&design_source)?;
+        let source = fs::read_to_string(&design_source)?;
+        let native = crate::url_import::native_design_css(site_dir, &source)?;
+        let minified = minify_stylesheet_text(&native, &design_source)?;
 
         if minified.trim().is_empty() {
             None
@@ -692,8 +735,13 @@ fn minify_stylesheet_source(css_path: &Path) -> Result<String> {
     let source = fs::read_to_string(css_path)
         .with_context(|| format!("Failed to read stylesheet {}", css_path.display()))?;
 
+    minify_stylesheet_text(&source, css_path)
+}
+
+/// Minifies an owned portion of a stylesheet through the existing CSS pipeline.
+fn minify_stylesheet_text(source: &str, css_path: &Path) -> Result<String> {
     let mut stylesheet = StyleSheet::parse(
-        &source,
+        source,
         ParserOptions {
             filename: css_path.to_string_lossy().into_owned(),
             ..ParserOptions::default()

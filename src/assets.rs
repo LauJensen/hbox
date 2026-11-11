@@ -9,6 +9,7 @@ use anyhow::{bail, Context, Result};
 use crate::ai::{
     chatgpt::ChatGptClient,
     AssetKind,
+    AssetOrigin,
     AssetsManifest,
 };
 
@@ -20,6 +21,9 @@ pub async fn generate_assets(
     staging_dir: &Path,
 ) -> Result<()> {
     validate_manifest(manifest)?;
+    if manifest.assets.iter().any(|asset| !asset.origin.is_generated()) {
+        bail!("downloaded assets must be staged by their source, not generated");
+    }
     reset_staging_dir(staging_dir).await?;
 
     client
@@ -152,8 +156,9 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
             ));
         }
 
-        match asset.kind {
-            AssetKind::Image => {
+        match (asset.origin, asset.kind) {
+            (AssetOrigin::Downloaded, _) => downloaded_asset_problems(asset, &label, &mut problems),
+            (_, AssetKind::Image) => {
                 if asset.generation_prompt.trim().is_empty() {
                     problems.push(format!(
                         "{label}: image generation prompt must not be empty"
@@ -192,7 +197,7 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
                 }
             }
 
-            AssetKind::Svg => {
+            (_, AssetKind::Svg) => {
                 if asset.generation_prompt.trim().is_empty() {
                     problems.push(format!(
                         "{label}: SVG generation prompt must not be empty"
@@ -218,7 +223,7 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
                 }
             }
 
-            AssetKind::CssGenerated => {
+            (_, AssetKind::CssGenerated) => {
                 if asset.generation_prompt.trim().is_empty() {
                     problems.push(format!(
                         "{label}: CSS generation prompt must not be empty"
@@ -248,13 +253,13 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
                 }
             }
 
-            AssetKind::Font => {
+            (_, AssetKind::Font) => {
                 problems.push(format!(
                     "{label}: font generation is not supported yet"
                 ));
             }
 
-            AssetKind::Video => {
+            (_, AssetKind::Video) => {
                 problems.push(format!(
                     "{label}: video generation is not supported yet"
                 ));
@@ -293,6 +298,27 @@ pub fn manifest_problems(manifest: &AssetsManifest) -> Vec<String> {
     }
 
     problems
+}
+
+/// Checks downloaded file types without imposing image-generation requirements.
+fn downloaded_asset_problems(
+    asset: &crate::ai::AssetManifestItem,
+    label: &str,
+    problems: &mut Vec<String>,
+) {
+    let extensions: &[&str] = match asset.kind {
+        AssetKind::Image => &["png", "jpg", "jpeg", "webp", "gif", "avif", "ico", "bmp"],
+        AssetKind::Svg => &["svg"],
+        AssetKind::Font => &["woff", "woff2", "ttf", "otf"],
+        AssetKind::Video => &["mp4", "webm", "ogv"],
+        AssetKind::CssGenerated => &[],
+    };
+    if !has_extension(&asset.filename, extensions) {
+        problems.push(format!("{label}: unsupported downloaded file extension for {:?}", asset.kind));
+    }
+    if !asset.generation_prompt.is_empty() || !asset.svg_code.is_empty() || asset.size.is_some() {
+        problems.push(format!("{label}: downloaded assets must not contain generation instructions"));
+    }
 }
 
 /// Validates a manifest at filesystem boundaries.

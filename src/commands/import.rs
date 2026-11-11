@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
+use reqwest::Url;
 
 use crate::{
     ai::{
@@ -25,15 +26,11 @@ use crate::{
     commands::build::build_site,
     config::ResolvedSite,
     previews,
+    url_import,
 };
 
-const DESIGN_BLOCK_START_PREFIX: &str = "/* hbox design import:start ";
-const DESIGN_BLOCK_END_PREFIX: &str = "/* hbox design import:end ";
-
+/// Imports into a preview using capture for URLs or model generation for images.
 pub async fn run(args: ImportDesignArgs) -> Result<()> {
-    let skip_api_call = false;
-    let skip_asset_gen = false;
-
     let site = ResolvedSite::resolve(&args.site_name)?;
 
     if !site.is_initialized() {
@@ -45,18 +42,24 @@ pub async fn run(args: ImportDesignArgs) -> Result<()> {
 
     // Do everything that can fail without creating a preview first.
     let page_slug = validate_page_slug(&args.slug)?;
-    let config = AiConfig::from_env(args.threads)?;
-    let client = ChatGptClient::new(config)?;
+    let source_url = parse_source_url(&args.source)?;
+    if args.form_endpoint.is_some() && source_url.is_none() {
+        bail!("--form-endpoint applies only to URL imports");
+    }
+    let client = if source_url.is_none() {
+        Some(ChatGptClient::new(AiConfig::from_env(args.threads)?)?)
+    } else {
+        None
+    };
 
     let preview_site = previews::create(&site)?;
 
     let import_result = import_into_preview(
         &preview_site,
-        &args.screenshot_path,
+        &args,
+        source_url.as_ref(),
         &page_slug,
-        &client,
-        skip_api_call,
-        skip_asset_gen,
+        client.as_ref(),
     )
     .await;
 
@@ -80,14 +83,14 @@ pub async fn run(args: ImportDesignArgs) -> Result<()> {
 
 async fn import_into_preview(
     preview_site: &ResolvedSite,
-    screenshot_path: &Path,
+    args: &ImportDesignArgs,
+    source_url: Option<&Url>,
     page_slug: &str,
-    client: &ChatGptClient,
-    skip_api_call: bool,
-    skip_asset_gen: bool,
+    client: Option<&ChatGptClient>,
 ) -> Result<()> {
     let partial_status = PartialStatus::inspect(preview_site.source_dir());
     let spinner = import_spinner();
+    let staging_dir = preview_site.source_dir().join(".hbox/import-assets-tmp");
 
     let cached_result_path = preview_site
         .source_dir()
@@ -97,26 +100,28 @@ async fn import_into_preview(
 
     // Capture the result before applying `?` so the spinner is always cleared.
     let write_result: Result<DesignImportResult> = async {
-        let result = if skip_api_call {
-            spinner.set_message("Reading cached import result");
-            read_design_import_result(&cached_result_path).await?
+        let result = if let Some(url) = source_url {
+            spinner.set_message(format!("Preserving frontend from {url}"));
+            url_import::prepare(
+                preview_site.source_dir(), url, page_slug,
+                args.form_endpoint.as_ref(), &staging_dir,
+            ).await.context("failed to import remote page")?
         } else {
             spinner.set_message(format!(
                 "Analyzing screenshot: {}",
-                screenshot_path.display()
+                args.source.display()
             ));
 
+            url_import::forget(preview_site.source_dir(), page_slug)?;
             client
-                .import_design(screenshot_path, &partial_status, &spinner)
+                .context("screenshot import requires an AI client")?
+                .import_design(&args.source, &partial_status, &spinner)
                 .await
                 .context("failed to import design")?
         };
 
-        validate_import_result(&result)?;
-
-        if !skip_api_call {
-            write_design_import_cache(&cached_result_path, &result).await?;
-        }
+        validate_import_result(&result, source_url.is_some())?;
+        write_design_import_cache(&cached_result_path, &result).await?;
 
         spinner.set_message("Writing imported page");
 
@@ -134,30 +139,25 @@ async fn import_into_preview(
     spinner.finish_and_clear();
     let result = write_result?;
 
-    if !skip_asset_gen {
-        let staging_dir = preview_site
-            .source_dir()
-            .join(".hbox/import-assets-tmp");
-
+    if source_url.is_none() {
         generate_assets(
-            client,
+            client.context("screenshot import requires an AI client")?,
             &result.files.assets_manifest,
             &staging_dir,
-        )
-        .await?;
-
-        install_assets(
-            preview_site.source_dir(),
-            &staging_dir,
-            &result.files.assets_manifest,
-        )?;
-
-        remove_staging_dir(&staging_dir).await?;
+        ).await?;
     }
+    install_assets(
+        preview_site.source_dir(),
+        &staging_dir,
+        &result.files.assets_manifest,
+    )?;
+    remove_staging_dir(&staging_dir).await?;
 
     build_site(preview_site).with_context(|| {
         format!("failed to build imported preview {preview_site}")
     })?;
+
+    for note in &result.notes { println!("Import note: {note}"); }
 
     Ok(())
 }
@@ -202,6 +202,7 @@ async fn write_design_import_result(
 
     let page_path = pages_dir.join(format!("{page_slug}.html"));
     let page_css_path = pages_dir.join(format!("{page_slug}.css"));
+    let page_js_path = pages_dir.join(format!("{page_slug}.js"));
     let design_css_path = site_dir.join("design.css");
 
     let design_spec_path =
@@ -229,13 +230,21 @@ async fn write_design_import_result(
     )
     .await?;
 
-    write_optional_page_css(
+    write_optional_page_file(
         &page_css_path,
         result.files.page_css.as_deref(),
+        "generated page CSS",
     )
     .await?;
 
-    upsert_design_css_block(
+    write_optional_page_file(
+        &page_js_path,
+        result.files.page_js.as_deref(),
+        "generated page JavaScript",
+    )
+    .await?;
+
+    crate::design::upsert_block(
         &design_css_path,
         page_slug,
         result.files.design_css.as_deref(),
@@ -284,12 +293,14 @@ async fn write_optional_partial(
     write_required_text(path, content, "generated partial").await
 }
 
-async fn write_optional_page_css(
+/// Replaces a page companion file, removing an old version when none is returned.
+async fn write_optional_page_file(
     path: &Path,
-    css: Option<&str>,
+    content: Option<&str>,
+    description: &str,
 ) -> Result<()> {
-    match non_empty(css) {
-        Some(css) => write_required_text(path, css, "generated page CSS").await,
+    match non_empty(content) {
+        Some(content) => write_required_text(path, content, description).await,
         None => remove_file_if_exists(path).await,
     }
 }
@@ -301,112 +312,6 @@ async fn remove_file_if_exists(path: &Path) -> Result<()> {
         Err(error) => Err(error)
             .with_context(|| format!("failed to remove stale file {}", path.display())),
     }
-}
-
-/// Inserts or replaces only the block owned by this imported page.
-///
-/// Everything outside the markers remains developer-owned and untouched. If a
-/// regenerated import no longer has reusable design CSS, its previous block is
-/// removed.
-async fn upsert_design_css_block(
-    path: &Path,
-    page_slug: &str,
-    css: Option<&str>,
-) -> Result<()> {
-    let existing = match tokio::fs::read_to_string(path).await {
-        Ok(text) => text,
-        Err(error) if error.kind() == ErrorKind::NotFound => String::new(),
-        Err(error) => {
-            return Err(error).with_context(|| {
-                format!("failed to read design stylesheet {}", path.display())
-            });
-        }
-    };
-
-    let start_marker = format!("{DESIGN_BLOCK_START_PREFIX}{page_slug} */");
-    let end_marker = format!("{DESIGN_BLOCK_END_PREFIX}{page_slug} */");
-
-    let without_previous =
-        remove_marked_block(&existing, &start_marker, &end_marker)?;
-
-    let updated = match non_empty(css) {
-        Some(css) => {
-            let mut output = without_previous.trim_end().to_string();
-
-            if !output.is_empty() {
-                output.push_str("\n\n");
-            }
-
-            output.push_str(&start_marker);
-            output.push('\n');
-            output.push_str(css.trim());
-            output.push('\n');
-            output.push_str(&end_marker);
-            output.push('\n');
-
-            output
-        }
-        None => {
-            let trimmed = without_previous.trim_end();
-
-            if trimmed.is_empty() {
-                String::new()
-            } else {
-                format!("{trimmed}\n")
-            }
-        }
-    };
-
-    tokio::fs::write(path, updated)
-        .await
-        .with_context(|| {
-            format!("failed to write design stylesheet {}", path.display())
-        })?;
-
-    Ok(())
-}
-
-fn remove_marked_block(
-    input: &str,
-    start_marker: &str,
-    end_marker: &str,
-) -> Result<String> {
-    let Some(start) = input.find(start_marker) else {
-        if input.contains(end_marker) {
-            bail!(
-                "found design CSS end marker without start marker: {}",
-                end_marker
-            );
-        }
-
-        return Ok(input.to_string());
-    };
-
-    let search_from = start + start_marker.len();
-
-    let relative_end = input[search_from..]
-        .find(end_marker)
-        .with_context(|| {
-            format!(
-                "found design CSS start marker without end marker: {}",
-                start_marker
-            )
-        })?;
-
-    let end = search_from + relative_end + end_marker.len();
-
-    if input[end..].contains(start_marker) {
-        bail!(
-            "multiple design CSS blocks found for the same page: {}",
-            start_marker
-        );
-    }
-
-    let mut output = String::with_capacity(input.len());
-    output.push_str(&input[..start]);
-    output.push_str(input[end..].trim_start_matches(['\r', '\n']));
-
-    Ok(output)
 }
 
 async fn write_required_text(
@@ -448,7 +353,7 @@ where
         .with_context(|| format!("failed to write JSON file {}", path.display()))
 }
 
-fn validate_import_result(result: &DesignImportResult) -> Result<()> {
+fn validate_import_result(result: &DesignImportResult, preserved: bool) -> Result<()> {
     let files = &result.files;
 
     if files.page_html.trim().is_empty() {
@@ -484,7 +389,13 @@ fn validate_import_result(result: &DesignImportResult) -> Result<()> {
     }
 
     validate_manifest(&files.assets_manifest)
-        .context("OpenAI returned an invalid assets manifest")?;
+        .context("invalid imported assets manifest")?;
+
+    // The preservation pipeline owns its complete resource graph, including
+    // binaries referenced only from external modules rather than page fields.
+    if preserved {
+        return Ok(());
+    }
 
     validate_asset_references(
         &files.assets_manifest,
@@ -492,6 +403,7 @@ fn validate_import_result(result: &DesignImportResult) -> Result<()> {
             files.page_html.as_str(),
             files.page_css.as_deref().unwrap_or_default(),
             files.design_css.as_deref().unwrap_or_default(),
+            files.page_js.as_deref().unwrap_or_default(),
             files.header_html.as_deref().unwrap_or_default(),
             files.footer_html.as_deref().unwrap_or_default(),
         ],
@@ -503,6 +415,22 @@ fn validate_import_result(result: &DesignImportResult) -> Result<()> {
 
 fn non_empty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+/// URLs use the existing positional source argument; local screenshot paths keep
+/// their original PathBuf handling, including non-UTF-8 filesystem paths.
+fn parse_source_url(source: &Path) -> Result<Option<Url>> {
+    let Some(value) = source.to_str() else { return Ok(None); };
+    let lower = value.to_ascii_lowercase();
+    if lower.starts_with("http:") || lower.starts_with("https:") || value.contains("://") {
+        let url = Url::parse(value).context("invalid import URL")?;
+        if !matches!(url.scheme(), "http" | "https") {
+            bail!("URL imports support only HTTP(S)");
+        }
+        Ok(Some(url))
+    } else {
+        Ok(None)
+    }
 }
 
 fn validate_page_slug(slug: &str) -> Result<String> {
@@ -533,20 +461,6 @@ fn validate_page_slug(slug: &str) -> Result<String> {
     }
 
     Ok(slug.to_string())
-}
-
-async fn read_design_import_result(
-    path: &Path,
-) -> Result<DesignImportResult> {
-    let text = tokio::fs::read_to_string(path)
-        .await
-        .with_context(|| {
-            format!("failed to read cached import result {}", path.display())
-        })?;
-
-    serde_json::from_str(&text).with_context(|| {
-        format!("failed to parse cached import result {}", path.display())
-    })
 }
 
 async fn write_design_import_cache(

@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![forbid(unsafe_code)] 
 
 use std::process::{ExitCode, Termination};
 
@@ -20,12 +20,13 @@ macro_rules! dev_print {
         }
     };
 }
-
+ 
 mod ai;
 mod assets;
 mod cli;
 mod commands;
 mod config;
+mod design;
 mod models;
 mod optimization;
 mod previews;
@@ -33,6 +34,7 @@ mod publish;
 mod rendering;
 mod templates;
 mod utils;
+mod url_import;
 mod watch;
 
 use cli::Cli;

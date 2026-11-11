@@ -34,6 +34,7 @@ const UPDATE_SYSTEM_PROMPT: &str = include_str!("../../resources/prompts/update.
 struct CurrentFiles<'a> {
     page_html: &'a str,
     page_css: Option<&'a str>,
+    page_js: Option<&'a str>,
     design_css: Option<&'a str>,
     global_css: &'a str,
 }
@@ -43,6 +44,8 @@ struct CurrentFiles<'a> {
 struct SiteUpdate {
     page_html: String,
     page_css: Option<String>,
+    #[serde(default)]
+    page_js: Option<String>,
     design_css: Option<String>,
     global_css: Option<String>,
     assets_manifest: AssetsManifest,
@@ -51,6 +54,7 @@ struct SiteUpdate {
 struct SourceFiles {
     page_html: String,
     page_css: Option<String>,
+    page_js: Option<String>,
     design_css: Option<String>,
     global_css: String,
 }
@@ -61,9 +65,13 @@ pub async fn run(args: UpdateDesignArgs) -> Result<()> {
 
     let site = ResolvedSite::resolve(&args.site_name)?;
     let source_site = site.source_dir();
-    ensure_site_exists(&source_site)?;
+    ensure_site_exists(source_site)?;
 
-    let source = read_source_files(&source_site, &args.slug)?;
+    let page_source = source_site.join("pages").join(format!("{}.html", args.slug));
+    if crate::url_import::PreservedPage::load(source_site, &page_source)?.is_some() {
+        bail!("this page preserves a compiled frontend; edit its source assets or re-import it. AI page updates cannot safely change its hydration contract yet");
+    }
+    let source = read_source_files(source_site, &args.slug)?;
     let llm_prompt = update_prompt(&args.prompt, &source)?;
 
     let ai_config = AiConfig::from_env(args.threads)?;
@@ -174,7 +182,10 @@ fn read_source_files(site: &Path, slug: &str) -> Result<SourceFiles> {
     Ok(SourceFiles {
         page_html: read_required(&site.join("pages").join(format!("{slug}.html")))?,
         page_css: read_optional(&site.join("pages").join(format!("{slug}.css")))?,
-        design_css: read_optional(&site.join("design.css"))?,
+        page_js: read_optional(&site.join("pages").join(format!("{slug}.js")))?,
+        design_css: read_optional(&site.join("design.css"))?
+            .map(|css| crate::url_import::native_design_css(site, &css))
+            .transpose()?,
         global_css: read_required(&site.join("global.css"))?,
     })
 }
@@ -195,6 +206,7 @@ fn update_prompt(user_prompt: &str, source: &SourceFiles) -> Result<String> {
     let files = CurrentFiles {
         page_html: &source.page_html,
         page_css: source.page_css.as_deref(),
+        page_js: source.page_js.as_deref(),
         design_css: source.design_css.as_deref(),
         global_css: &source.global_css,
     };
@@ -203,10 +215,13 @@ fn update_prompt(user_prompt: &str, source: &SourceFiles) -> Result<String> {
         concat!(
             "Requested change:\n{}\n\n",
             "Current files:\n{}\n\n",
-            "Return the complete updated page_html. For page_css, design_css, ",
+            "Return the complete updated page_html. For page_css, page_js, design_css, ",
             "and global_css, return the complete replacement only when that file ",
             "must change; otherwise return null. Return only newly created or ",
-            "replaced assets in assets_manifest."
+            "replaced assets in assets_manifest. Hbox automatically builds pages/<slug>.js ",
+            "and injects its deferred script; do not add a script tag for it. Keep browser ",
+            "behavior in page_js and keep selectors consistent with changed HTML. ",
+            "To remove all page behavior, return a comment-only replacement script."
         ),
         user_prompt.trim(),
         serde_json::to_string_pretty(&files)?
@@ -227,6 +242,7 @@ fn validate_update(
 
     for (name, contents) in [
         ("page_css", update.page_css.as_deref()),
+        ("page_js", update.page_js.as_deref()),
         ("design_css", update.design_css.as_deref()),
         ("global_css", update.global_css.as_deref()),
     ] {
@@ -242,6 +258,7 @@ fn validate_update(
         &update.assets_manifest,
         [
             update.page_html.as_str(),
+            update.page_js.as_deref().or(source.page_js.as_deref()).unwrap_or_default(),
             update
                 .page_css
                 .as_deref()
@@ -306,8 +323,15 @@ fn apply_updated_files(preview_site: &Path, slug: &str, update: &SiteUpdate) -> 
         update.page_css.as_deref(),
     )?;
     write_optional_file(
+        &preview_site.join("pages").join(format!("{slug}.js")),
+        update.page_js.as_deref(),
+    )?;
+    let design_css = update.design_css.as_deref()
+        .map(|css| crate::url_import::merge_native_design_css(preview_site, css))
+        .transpose()?;
+    write_optional_file(
         &preview_site.join("design.css"),
-        update.design_css.as_deref(),
+        design_css.as_deref(),
     )?;
     write_optional_file(
         &preview_site.join("global.css"),
@@ -363,6 +387,7 @@ fn update_schema() -> Value {
         "properties": {
             "page_html": { "type": "string" },
             "page_css": { "type": ["string", "null"] },
+            "page_js": { "type": ["string", "null"] },
             "design_css": { "type": ["string", "null"] },
             "global_css": { "type": ["string", "null"] },
             "assets_manifest": {
@@ -411,6 +436,7 @@ fn update_schema() -> Value {
         "required": [
             "page_html",
             "page_css",
+            "page_js",
             "design_css",
             "global_css",
             "assets_manifest"

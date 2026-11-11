@@ -30,7 +30,7 @@ pub enum Command {
     Build(BuildArgs),
 
     #[command(name = "import")]
-    /// Spawn a site or a single page from an image
+    /// Import a page from a screenshot or a public HTTP(S) URL
     ImportDesign(ImportDesignArgs),
 
     /// Update a page via LLM
@@ -69,11 +69,16 @@ pub struct ImportDesignArgs {
     #[arg(value_name="site_name", add = ArgValueCompleter::new(complete_site))]
     pub site_name: PathBuf,
 
-    /// Path to inspirational screenshot
-    pub screenshot_path: PathBuf,
+    /// Screenshot path or public page URL
+    #[arg(value_name = "SOURCE")]
+    pub source: PathBuf,
 
     /// Name of page (slug)
     pub slug: String,
+
+    /// Override one static form/fetch submission URL; backend code is not imported
+    #[arg(long, value_name = "URL")]
+    pub form_endpoint: Option<reqwest::Url>,
 
     #[arg(long = "threads", short = 't', default_value = "2")]
     /// Concurrent calls to LLM backend (beware of ratelimits)

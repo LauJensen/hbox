@@ -16,8 +16,14 @@ pub fn optimize(
 ) -> Result<()> {
     println!("Optimizing {:?}", dist_dir);
 
-    let html_files =
-        images::find_dist_html_files(dist_dir)?;
+    let mut html_files = Vec::new();
+    for path in images::find_dist_html_files(dist_dir)? {
+        let html = std::fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        if !crate::url_import::is_preserved_html(&html) {
+            html_files.push(path);
+        }
+    }
 
     let results_by_path =
         images::build_results_by_path(

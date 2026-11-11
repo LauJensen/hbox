@@ -264,6 +264,7 @@ pub struct ChatGptClient {
     responses_url: String,
     image_generations_url: String,
     model: String,
+    reasoning_effort: Option<String>,
     image_model: String,
     image_quality: String,
     concurrency: usize,
@@ -295,6 +296,7 @@ impl ChatGptClient {
                 "{api_base_url}/images/generations"
             ),
             model: config.model,
+            reasoning_effort: config.reasoning_effort,
             image_model: config.image_model,
             image_quality: config.image_quality,
             concurrency: config.concurrency.get(),
@@ -314,7 +316,7 @@ impl ChatGptClient {
         let design_spec = serde_json::to_value(design_spec)
             .context("failed to serialize typed design brief")?;
 
-        Ok(DesignImportResult { design_spec, files })
+        Ok(DesignImportResult { design_spec, files, notes: Vec::new() })
     }
 
     pub async fn analyze_screenshot(
@@ -442,6 +444,17 @@ impl ChatGptClient {
         body.as_object_mut()
             .context("OpenAI Responses request body must be a JSON object")?
             .insert("store".to_owned(), Value::Bool(false));
+
+        if let Some(preference) = &self.reasoning_effort {
+            // Preserve the selected model. GPT-5.1's documented maximum is high.
+            let gpt_5_1 = self.model == "gpt-5.1" || self.model.starts_with("gpt-5.1-20");
+            let effort = if preference == "max" && gpt_5_1 {
+                "high"
+            } else {
+                preference
+            };
+            body["reasoning"] = json!({ "effort": effort });
+        }
 
         let response = self
             .post_json_with_retry(
@@ -853,7 +866,7 @@ fn validate_partial(
     }
 }
 
-fn validate_generated_files(files: &GeneratedSiteFiles, partial_status: &PartialStatus)
+pub(crate) fn validate_generated_files(files: &GeneratedSiteFiles, partial_status: &PartialStatus)
                             -> Result<()> {
     if files.page_html.trim().is_empty() {
         bail!("generated page_html is empty");
@@ -873,6 +886,10 @@ fn validate_generated_files(files: &GeneratedSiteFiles, partial_status: &Partial
         if design_css.trim().is_empty() {
             bail!("design_css must be null or a non-empty string");
         }
+    }
+
+    if files.page_js.as_deref().is_some_and(|script| script.trim().is_empty()) {
+        bail!("page_js must be null or a non-empty string");
     }
 
     if let Some(header_html) = files.header_html.as_deref() {

@@ -14,6 +14,8 @@ pub struct AiConfig {
     pub api_key: String,
     pub api_base_url: String,
     pub model: String,
+    /// Preferred text-model effort; max is mapped to high for GPT-5.1.
+    pub reasoning_effort: Option<String>,
     pub image_model: String,
     pub image_quality: String,
     pub concurrency: NonZeroUsize,
@@ -30,6 +32,15 @@ impl AiConfig {
         let model = std::env::var("OPENAI_MODEL")
             .unwrap_or_else(|_| "gpt-5.1".to_string());
 
+        let effort = std::env::var("OPENAI_REASONING_EFFORT")
+            .unwrap_or_else(|_| "max".to_owned());
+        let effort = effort.trim();
+        anyhow::ensure!(
+            matches!(effort, "auto" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"),
+            "OPENAI_REASONING_EFFORT must be auto, none, minimal, low, medium, high, xhigh, or max"
+        );
+        let reasoning_effort = (effort != "auto").then(|| effort.to_owned());
+
         let image_model = std::env::var("OPENAI_IMAGE_MODEL")
             .unwrap_or_else(|_| "gpt-image-2".to_string());
 
@@ -40,6 +51,7 @@ impl AiConfig {
             api_key,
             api_base_url,
             model,
+            reasoning_effort,
             image_model,
             image_quality,
             concurrency,
@@ -51,6 +63,9 @@ impl AiConfig {
 pub struct GeneratedSiteFiles {
     pub page_html:       String,
     pub page_css:        Option<String>,
+    /// Optional browser behavior; built from pages/<slug>.js without templating.
+    #[serde(default)]
+    pub page_js:         Option<String>,
     pub design_css:      Option<String>,
     pub assets_manifest: AssetsManifest,
     pub header_html:     Option<String>,
@@ -68,12 +83,30 @@ pub struct AssetManifestItem {
     pub kind: AssetKind,
     pub description: String,
 
+    /// Downloaded files bypass generation, but share installation/path checks.
+    #[serde(default, skip_serializing_if = "AssetOrigin::is_generated")]
+    pub origin: AssetOrigin,
+
     #[serde(default)]
     pub generation_prompt: String,
 
     pub size: Option<String>,
     #[serde(default)]
     pub svg_code: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AssetOrigin {
+    #[default]
+    Generated,
+    Downloaded,
+}
+
+impl AssetOrigin {
+    pub fn is_generated(&self) -> bool {
+        *self == Self::Generated
+    }
 }
 
 impl AssetManifestItem {
@@ -130,6 +163,9 @@ pub enum AssetKind {
 pub struct DesignImportResult {
     pub design_spec: Value,
     pub files: GeneratedSiteFiles,
+    /// Conversion limitations are retained in the cache and shown with the preview.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
